@@ -97,6 +97,17 @@ def structure_smc_chart(
                 labeled_zone_kinds.add(zone["kind"])
             ax.axvspan(x0, x1, color=color, alpha=alpha, label=label)
 
+            prob = zone.get("prob")
+            if prob is not None:
+                is_bullish = zone["kind"] == "bullish"
+                ax.annotate(
+                    f"{prob['probability']:.0f}%",
+                    xy=(x1, zone["top"] if is_bullish else zone["bottom"]),
+                    xytext=(0, 5 if is_bullish else -5), textcoords="offset points",
+                    fontsize=8, fontweight="bold", color=color,
+                    ha="right", va="bottom" if is_bullish else "top",
+                )
+
         labeled_sweep_kinds = set()
         for sweep in sweeps:
             if sweep["idx"] < corte:

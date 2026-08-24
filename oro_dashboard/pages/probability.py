@@ -8,9 +8,9 @@ import streamlit as st
 
 from core import config
 from core.calendar import IMPACTO_COLOR, events_naive
-from core.data import fetch_interval
+from core.data import fetch_deep, fetch_interval
 from core.probability import backtest_by_trend, backtest_targets, backtest_targets_intrabar, direction_levels
-from core.smc_zones import multi_timeframe_bias
+from core.smc_zones import atr, detect_liquidity_sweeps, detect_order_blocks, label_structure, zone_probability
 from core.structure_naive import nearest_liquidity_target, own_trend
 from core.timeutil import current_session_label, to_new_york_time
 from core.state import render_refresh_control
@@ -191,33 +191,39 @@ st.markdown("---")
 st.markdown(f"##### 📐 Estructura SMC ({config.ICT_STRUCTURE_INTERVAL}) — Order Blocks y Barridas de Liquidez")
 st.caption(
     f"Order Blocks y barridas de liquidez de la Estrategia Institucional (SMC) en {config.ICT_STRUCTURE_INTERVAL}, "
-    f"con el sesgo diario ({config.ICT_BIAS_INTERVAL}) vigente en el titulo."
+    f"con el sesgo diario ({config.ICT_BIAS_INTERVAL}) vigente en el titulo. Cada zona se etiqueta con su "
+    "probabilidad de continuacion, estimada contra estructuras analogas de todo el historico disponible "
+    "(no solo las mas recientes)."
 )
 
 
 @st.fragment(run_every=refresh_seconds or None)
 def render_structure_smc() -> None:
     df_bias = fetch_interval(config.ICT_BIAS_INTERVAL)
-    df_structure = fetch_interval(config.ICT_STRUCTURE_INTERVAL)
-    df_entry = fetch_interval(config.ICT_ENTRY_INTERVAL)
-    if (
-        df_bias.empty or df_structure.empty or df_entry.empty
-        or len(df_structure) < 60 or len(df_entry) < 60
-    ):
-        st.warning(
-            f"No hay suficientes velas en alguna de las 3 temporalidades "
-            f"({config.ICT_BIAS_INTERVAL}/{config.ICT_STRUCTURE_INTERVAL}/{config.ICT_ENTRY_INTERVAL}) ahora mismo."
-        )
+    df_structure = fetch_deep(config.ICT_STRUCTURE_INTERVAL)
+    if df_bias.empty or df_structure.empty or len(df_structure) < 60:
+        st.warning(f"No hay suficientes velas en {config.ICT_BIAS_INTERVAL}/{config.ICT_STRUCTURE_INTERVAL} ahora mismo.")
         return
 
-    result = multi_timeframe_bias(df_bias, df_structure, df_entry)
+    macro_bias = label_structure(df_bias)["bias"]
+    zones = detect_order_blocks(df_structure, lookback=5, max_zones=200)
+    sweeps = detect_liquidity_sweeps(df_structure, lookback=5, max_sweeps=50)
+    atr_value = float(atr(df_structure).iloc[-1])
+    for zone in zones:
+        zone["prob"] = zone_probability(zones, zone, atr_value)
+
     fig_smc = structure_smc_chart(
-        df_structure, result["structure_zones"], result["structure_sweeps"],
+        df_structure, zones, sweeps,
         symbol_label=config.SYMBOL_LABEL, structure_interval_label=config.ICT_STRUCTURE_INTERVAL,
-        macro_bias=result["macro_bias"],
+        macro_bias=macro_bias,
     )
     st.pyplot(fig_smc, width="stretch")
     plt.close(fig_smc)
+    st.caption(
+        f"Historico analizado: {len(df_structure)} velas de {config.ICT_STRUCTURE_INTERVAL} "
+        f"({df_structure.index[0].strftime('%d/%m/%Y')} → {df_structure.index[-1].strftime('%d/%m/%Y')}) "
+        f"— {sum(1 for z in zones if z['status'] in ('continuo', 'fallo'))} estructuras resueltas usadas como analogos."
+    )
 
 
 render_structure_smc()
