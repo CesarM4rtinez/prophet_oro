@@ -64,6 +64,62 @@ def targets_price_chart(
     return fig
 
 
+def structure_smc_chart(
+    df_structure: pd.DataFrame,
+    zones: list[dict],
+    sweeps: list[dict],
+    symbol_label: str,
+    structure_interval_label: str,
+    macro_bias: str,
+    window: int = 200,
+) -> plt.Figure:
+    """Estructura SMC de una sola temporalidad: Order Blocks (zonas sombreadas) y
+    barridas de liquidez (marcador 'x'), con el sesgo diario en el titulo — replica
+    la celda "Estrategia Institucional SMC" de proyecciones_oro_prophet.ipynb."""
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(13, 6.5))
+        reciente = df_structure.tail(window)
+        ax.plot(reciente.index, reciente["close"], color="#00bfff", linewidth=1.2, label=symbol_label)
+
+        corte = len(df_structure) - window
+        labeled_zone_kinds = set()
+        for zone in zones:
+            if zone["end_idx"] < corte:
+                continue
+            x0 = df_structure.index[max(0, zone["start_idx"])]
+            x1 = df_structure.index[min(zone["end_idx"], len(df_structure) - 1)]
+            color = "lime" if zone["kind"] == "bullish" else "red"
+            alpha = 0.06 if zone["status"] == "fallo" else 0.16
+            label = None
+            if zone["kind"] not in labeled_zone_kinds:
+                label = f"Order Block {'alcista' if zone['kind'] == 'bullish' else 'bajista'}"
+                labeled_zone_kinds.add(zone["kind"])
+            ax.axvspan(x0, x1, color=color, alpha=alpha, label=label)
+
+        labeled_sweep_kinds = set()
+        for sweep in sweeps:
+            if sweep["idx"] < corte:
+                continue
+            t = df_structure.index[sweep["idx"]]
+            color = "red" if sweep["kind"] == "bearish" else "lime"
+            label = None
+            if sweep["kind"] not in labeled_sweep_kinds:
+                label = f"Barrida {'alcista' if sweep['kind'] == 'bullish' else 'bajista'}"
+                labeled_sweep_kinds.add(sweep["kind"])
+            ax.scatter([t], [sweep["level"]], color=color, marker="x", s=100, zorder=5, label=label)
+
+        ax.set_title(
+            f"{symbol_label} - Estructura SMC ({structure_interval_label}) - "
+            f"Sesgo diario: {macro_bias.upper()}",
+            fontsize=14, fontweight="bold",
+        )
+        ax.legend(loc="upper left", fontsize=8)
+        ax.grid(alpha=0.3)
+        fig.autofmt_xdate(rotation=45, ha="right")
+        fig.tight_layout()
+    return fig
+
+
 def structure_multi_timeframe_chart(
     panels: list[dict],
     symbol_label: str,

@@ -10,11 +10,11 @@ from core import config
 from core.calendar import IMPACTO_COLOR, events_naive
 from core.data import fetch_interval
 from core.probability import backtest_by_trend, backtest_targets, direction_levels
-from core.smc_zones import cached_multi_timeframe_probability, detect_swings
+from core.smc_zones import cached_multi_timeframe_probability, detect_swings, multi_timeframe_bias
 from core.timeutil import current_session_label, to_new_york_time
 from core.state import render_refresh_control
 from ui.charts import add_calendar_events, add_level_lines, add_update_marker, candlestick_chart, grouped_bar_chart
-from ui.mpl_charts import structure_multi_timeframe_chart, targets_price_chart
+from ui.mpl_charts import structure_multi_timeframe_chart, structure_smc_chart, targets_price_chart
 from ui.theme import COLORS, inject_css, render_data_status
 
 inject_css()
@@ -119,25 +119,59 @@ def render_conditional() -> None:
     entry_now = float(close[-1])
     updated_label = f"{to_new_york_time(df.index[-1]).strftime('%d/%m/%Y %H:%M')} (NY)"
 
-    pc1, pc2 = st.columns(2)
-    for col, dir_key, dir_label in ((pc1, "compra", "COMPRA"), (pc2, "venta", "VENTA")):
+    for dir_key, dir_label, badge in (("compra", "COMPRA", "🟢"), ("venta", "VENTA", "🔴")):
         sl, t1, t2 = direction_levels(entry_now, 0.01, 0.01, 0.02, dir_key)
-        with col:
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Entry", f"${entry_now:,.2f}")
-            m2.metric("Stoploss", f"${sl:,.2f}")
-            m3.metric("Target 1", f"${t1:,.2f}")
-            m4.metric("Target 2", f"${t2:,.2f}")
-            fig_mpl = targets_price_chart(
-                df, entry=entry_now, stoploss=sl, target1=t1, target2=t2,
-                updated_at_label=updated_label, symbol_label=config.SYMBOL_LABEL,
-                direction_label=dir_label, entry_label="Entry" if dir_key == "compra" else "Entry (venta)",
-            )
-            st.pyplot(fig_mpl, width="stretch")
-            plt.close(fig_mpl)
+        st.markdown(f"**{badge} {dir_label}**")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Entry", f"${entry_now:,.2f}")
+        m2.metric("Stoploss", f"${sl:,.2f}")
+        m3.metric("Target 1", f"${t1:,.2f}")
+        m4.metric("Target 2", f"${t2:,.2f}")
+        fig_mpl = targets_price_chart(
+            df, entry=entry_now, stoploss=sl, target1=t1, target2=t2,
+            updated_at_label=updated_label, symbol_label=config.SYMBOL_LABEL,
+            direction_label=dir_label, entry_label="Entry" if dir_key == "compra" else "Entry (venta)",
+        )
+        st.pyplot(fig_mpl, width="stretch")
+        plt.close(fig_mpl)
 
 
 render_conditional()
+
+st.markdown("---")
+st.markdown(f"##### 📐 Estructura SMC ({config.ICT_STRUCTURE_INTERVAL}) — Order Blocks y Barridas de Liquidez")
+st.caption(
+    f"Order Blocks y barridas de liquidez de la Estrategia Institucional (SMC) en {config.ICT_STRUCTURE_INTERVAL}, "
+    f"con el sesgo diario ({config.ICT_BIAS_INTERVAL}) vigente en el titulo."
+)
+
+
+@st.fragment(run_every=refresh_seconds or None)
+def render_structure_smc() -> None:
+    df_bias = fetch_interval(config.ICT_BIAS_INTERVAL)
+    df_structure = fetch_interval(config.ICT_STRUCTURE_INTERVAL)
+    df_entry = fetch_interval(config.ICT_ENTRY_INTERVAL)
+    if (
+        df_bias.empty or df_structure.empty or df_entry.empty
+        or len(df_structure) < 60 or len(df_entry) < 60
+    ):
+        st.warning(
+            f"No hay suficientes velas en alguna de las 3 temporalidades "
+            f"({config.ICT_BIAS_INTERVAL}/{config.ICT_STRUCTURE_INTERVAL}/{config.ICT_ENTRY_INTERVAL}) ahora mismo."
+        )
+        return
+
+    result = multi_timeframe_bias(df_bias, df_structure, df_entry)
+    fig_smc = structure_smc_chart(
+        df_structure, result["structure_zones"], result["structure_sweeps"],
+        symbol_label=config.SYMBOL_LABEL, structure_interval_label=config.ICT_STRUCTURE_INTERVAL,
+        macro_bias=result["macro_bias"],
+    )
+    st.pyplot(fig_smc, width="stretch")
+    plt.close(fig_smc)
+
+
+render_structure_smc()
 
 st.markdown("---")
 st.markdown("##### 🧭 Estructura Multi-Temporalidad (5m / 15m / 1h)")
