@@ -59,6 +59,64 @@ def backtest_targets(
     }
 
 
+def _first_hit_intrabar(high: np.ndarray, low: np.ndarray, sl: float, t1: float, t2: float, direction: str) -> str | None:
+    """Igual que `_first_hit` pero mirando las mechas (High/Low) en vez de solo el
+    cierre — un stop/target se puede tocar intravela sin que el CIERRE llegue a
+    romperlo. Cuando una misma vela toca ambos lados (SL y TP), se asume el peor
+    caso (Stoploss primero), porque OHLC no dice cual paso primero."""
+    for h, l in zip(high[1:], low[1:]):
+        if direction == "compra":
+            if l <= sl:
+                return "Stoploss"
+            if h >= t2:
+                return "Target2"
+            if h >= t1:
+                return "Target1"
+        else:
+            if h >= sl:
+                return "Stoploss"
+            if l <= t2:
+                return "Target2"
+            if l <= t1:
+                return "Target1"
+    return None
+
+
+def backtest_targets_intrabar(
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    window: int = 30,
+    sl_pct: float = 0.01,
+    t1_pct: float = 0.01,
+    t2_pct: float = 0.02,
+    direction: str = "compra",
+) -> dict:
+    """Version intrabar de `backtest_targets`: la entrada de cada ventana sigue
+    siendo el CIERRE (asi se coloca la orden en la practica), pero el "primer
+    toque" de SL/TP se juzga contra High/Low, no solo contra el cierre — mas
+    realista que `backtest_targets`, que subestima cuantas veces se toca el nivel
+    porque una mecha puede tocarlo y el precio cerrar del otro lado."""
+    counts = {"Target1": 0, "Target2": 0, "Stoploss": 0, "Total": 0}
+    for i in range(len(close) - window):
+        start = close[i]
+        seg_high = high[i : i + window]
+        seg_low = low[i : i + window]
+        sl, t1, t2 = direction_levels(start, sl_pct, t1_pct, t2_pct, direction)
+        hit = _first_hit_intrabar(seg_high, seg_low, sl, t1, t2, direction)
+        if hit:
+            counts[hit] += 1
+        counts["Total"] += 1
+
+    total = counts["Total"] or 1
+    return {
+        "target1_pct": counts["Target1"] / total * 100,
+        "target2_pct": counts["Target2"] / total * 100,
+        "stoploss_pct": counts["Stoploss"] / total * 100,
+        "sample_size": counts["Total"],
+    }
+
+
 def backtest_by_trend(
     close: np.ndarray,
     window: int = 30,

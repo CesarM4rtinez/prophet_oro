@@ -9,11 +9,12 @@ import streamlit as st
 from core import config
 from core.calendar import IMPACTO_COLOR, events_naive
 from core.data import fetch_interval
-from core.probability import backtest_by_trend, backtest_targets, direction_levels
+from core.probability import backtest_by_trend, backtest_targets, backtest_targets_intrabar, direction_levels
 from core.smc_zones import cached_multi_timeframe_probability, detect_swings, multi_timeframe_bias
 from core.timeutil import current_session_label, to_new_york_time
 from core.state import render_refresh_control
 from ui.charts import add_calendar_events, add_level_lines, add_update_marker, candlestick_chart, grouped_bar_chart
+from ui.insight_cards import mini_bar_chart, render_insight_card
 from ui.mpl_charts import structure_multi_timeframe_chart, structure_smc_chart, targets_price_chart
 from ui.theme import COLORS, inject_css, render_data_status
 
@@ -45,6 +46,8 @@ def render_global() -> None:
         return
 
     close = df["close"].to_numpy(dtype=float)
+    high = df["high"].to_numpy(dtype=float)
+    low = df["low"].to_numpy(dtype=float)
     result = backtest_targets(close, direction=direction)
 
     render_data_status(to_new_york_time(df.index[-1]), current_session_label(df.index[-1]))
@@ -55,12 +58,57 @@ def render_global() -> None:
     else:
         stoploss, target1, target2 = entry * 1.01, entry * 0.99, entry * 0.98
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Entry", f"${entry:,.2f}")
-    c2.metric("Target 1 alcanzado", f"{result['target1_pct']:.1f}%")
-    c3.metric("Target 2 alcanzado", f"{result['target2_pct']:.1f}%")
-    c4.metric("Stoploss tocado", f"{result['stoploss_pct']:.1f}%")
+    st.metric("Entry", f"${entry:,.2f}")
     st.caption(f"Muestra: {result['sample_size']} ventanas de 30 velas ({interval}).")
+
+    regime_summary = backtest_by_trend(close, direction=direction)
+    intrabar = backtest_targets_intrabar(high, low, close, direction=direction)
+    n = result["sample_size"]
+
+    card1, card2, card3 = st.columns(3)
+    with card1:
+        regime_colors = [COLORS["bull"], COLORS["bear"], COLORS["text_muted"]]
+        fig1 = mini_bar_chart(list(regime_summary["Regimen"]), list(regime_summary["Target1 (%)"]), regime_colors)
+        render_insight_card(
+            icon="🎯", label="Target 1 alcanzado", value=f"{result['target1_pct']:.1f}%",
+            subtitle=f"Muestra: {n} ventanas ({interval})", accent=COLORS["bull"],
+            hidden_html=(
+                "Este promedio mezcla <b>3 regimenes distintos</b> (alcista, bajista, lateral). "
+                "La probabilidad real depende de cual este vigente ahora, no de un solo numero global."
+            ),
+            fig=fig1,
+        )
+    with card2:
+        independent_n = max(1, n // 30)
+        fig2 = mini_bar_chart(
+            ["Ventanas contadas", "Obs. independientes"], [n, independent_n],
+            [COLORS["series_hist"], COLORS["warning"]], value_fmt="{:.0f}",
+        )
+        render_insight_card(
+            icon="🎯", label="Target 2 alcanzado", value=f"{result['target2_pct']:.1f}%",
+            subtitle=f"Muestra: {n} ventanas ({interval})", accent=COLORS["series_forecast"],
+            hidden_html=(
+                f"Las {n} ventanas se <b>solapan entre si</b> (comparten hasta 29 de 30 velas). "
+                f"La evidencia realmente independiente es mucho menor: <b>~{independent_n}</b> observaciones, no {n}."
+            ),
+            fig=fig2,
+        )
+    with card3:
+        delta = intrabar["stoploss_pct"] - result["stoploss_pct"]
+        fig3 = mini_bar_chart(
+            ["Solo cierre", "Con mechas (H/L)"], [result["stoploss_pct"], intrabar["stoploss_pct"]],
+            [COLORS["text_muted"], COLORS["bear"]],
+        )
+        render_insight_card(
+            icon="🛑", label="Stoploss tocado", value=f"{result['stoploss_pct']:.1f}%",
+            subtitle="Calculado solo con cierres (Close)", accent=COLORS["bear"],
+            hidden_html=(
+                f"Este {result['stoploss_pct']:.1f}% solo cuenta <b>cierres</b> mas alla del stop. Contando las "
+                f"<b>mechas</b> (High/Low), el stop se toca el {intrabar['stoploss_pct']:.1f}% de las veces "
+                f"({delta:+.1f} puntos mas real)."
+            ),
+            fig=fig3,
+        )
 
     if is_daily:
         reciente = df.tail(25)
