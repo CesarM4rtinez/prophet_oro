@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 
-def _levels(start: float, sl_pct: float, t1_pct: float, t2_pct: float, direction: str) -> tuple[float, float, float]:
+def direction_levels(start: float, sl_pct: float, t1_pct: float, t2_pct: float, direction: str) -> tuple[float, float, float]:
+    """(stoploss, target1, target2) para `start` segun direccion (celdas 13/15 del notebook)."""
     if direction == "compra":
         return start * (1 - sl_pct), start * (1 + t1_pct), start * (1 + t2_pct)
     # venta: stoploss por ENCIMA de la entrada, targets por DEBAJO (celda 15, espejo de compra)
@@ -43,7 +44,7 @@ def backtest_targets(
     counts = {"Target1": 0, "Target2": 0, "Stoploss": 0, "Total": 0}
     for i in range(len(close) - window):
         segment = close[i : i + window]
-        sl, t1, t2 = _levels(segment[0], sl_pct, t1_pct, t2_pct, direction)
+        sl, t1, t2 = direction_levels(segment[0], sl_pct, t1_pct, t2_pct, direction)
         hit = _first_hit(segment, sl, t1, t2, direction)
         if hit:
             counts[hit] += 1
@@ -73,7 +74,7 @@ def backtest_by_trend(
         slope = np.polyfit(range(window), segment, 1)[0]
         regime = "Alcista" if slope > slope_threshold else "Bajista" if slope < -slope_threshold else "Lateral"
 
-        sl, t1, t2 = _levels(segment[0], sl_pct, t1_pct, t2_pct, direction)
+        sl, t1, t2 = direction_levels(segment[0], sl_pct, t1_pct, t2_pct, direction)
         hit = _first_hit(segment, sl, t1, t2, direction)
         if hit:
             buckets[regime][hit] += 1
