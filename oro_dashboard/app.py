@@ -20,7 +20,7 @@ def home_page() -> None:
     st.caption(
         "Analitica de oro (XAU/USD) via el proxy PAXG-USD: pronostico Prophet, patrones tecnicos, "
         "probabilidad historica de targets, plan de trading para la killzone de Nueva York y "
-        "confirmacion de estructura multi-temporalidad (5m/15m/1h)."
+        "estrategia institucional SMC con sesgo diario, order blocks y barridas de liquidez."
     )
 
     refresh_seconds = render_refresh_control()
@@ -48,7 +48,7 @@ def home_page() -> None:
         ("🔍 Patrones Tecnicos", "Picos, valles, patron armonico ABCD y hombro-cabeza-hombro (15m)."),
         ("🎯 Probabilidad de Targets", "Backtest de probabilidad global, por regimen de tendencia y cruzado con el calendario economico."),
         ("🕗 Plan Killzone NY", "Entrada/SL/TP para la sesion de Nueva York, con eventos economicos del dia."),
-        ("🧭 Estructura Multi-Temporalidad", "Confirmacion de BOS entre 5m/15m/1h y veredicto de señal operable."),
+        ("🧠 Estrategia Institucional (SMC)", "Sesgo diario + order blocks 1h + barridas de liquidez confirmadas (AMD) + RR minimo antes de listar un setup."),
     ]
     cols = st.columns(3)
     for i, (card_title, desc) in enumerate(cards):
@@ -66,7 +66,7 @@ pages = {
         st.Page("pages/patterns.py", title="Patrones Tecnicos", icon="🔍"),
         st.Page("pages/probability.py", title="Probabilidad de Targets", icon="🎯"),
         st.Page("pages/killzone.py", title="Plan Killzone NY", icon="🕗"),
-        st.Page("pages/structure_mtf.py", title="Estructura Multi-Temporalidad", icon="🧭"),
+        st.Page("pages/structure_mtf.py", title="Estrategia Institucional (SMC)", icon="🧠"),
     ],
 }
 

@@ -43,7 +43,18 @@ KILLZONE_NY_START = "08:00"
 KILLZONE_NY_END = "12:00"
 KILLZONE_TZ = "America/New_York"
 
-# Estructura multi-temporalidad (celda 17)
-SWING_LOOKBACK = 3
-STRUCTURE_RESULT_WINDOW = 40
-STRUCTURE_CONTINUATION_THRESHOLD_PCT = 0.3
+# --- Estrategia institucional (SMC/ICT), core/smc_zones.py --------------------
+
+# Cascada de temporalidades: mayor = sesgo, media = estructura, menor = entrada.
+# El usuario pidio explicitamente sumar una temporalidad tipo 1D despues de que
+# una barrida de liquidez en 5m/15m/1h (sin sesgo macro que la filtrara) genero
+# una señal alcista falsa justo antes de una reversion.
+ICT_BIAS_INTERVAL = "1d"
+ICT_STRUCTURE_INTERVAL = "1h"
+ICT_ENTRY_INTERVAL = "5m"
+ICT_MIN_RR = 2.0
+ICT_MANIPULATION_SL_ATR_MULT = 0.15
+PROBABILITY_ANALOG_TOLERANCE = 0.5  # +/- 50% de la altura de zona relativa al ATR
+PROBABILITY_RECENT_STRUCTURE_N = 30
+PROBABILITY_RETEST_WARNING_PCT = 35.0
+PROBABILITY_SIGNAL_TP_FRACTIONS = (0.2, 0.4, 0.6, 0.8, 1.0)

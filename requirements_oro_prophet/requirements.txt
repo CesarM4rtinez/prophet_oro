@@ -1,0 +1,27 @@
+# Dependencias para:
+#   - proyecciones_oro_prophet.ipynb
+#
+# Instalar con:
+#   pip install -r requirements_oro_prophet/requirements.txt
+#
+# Notas:
+#   - openpyxl es necesario para leer/escribir los .xlsx (calendario económico
+#     y exportación a Power BI), aunque no se importa directamente en el notebook.
+#   - ipykernel es necesario para poder ejecutar el .ipynb como notebook
+#     (en VSCode/Jupyter), no lo usa el código de las celdas en sí.
+#   - streamlit es necesario porque la celda "Estrategia Institucional SMC" importa
+#     el motor de oro_dashboard/core/smc_zones.py (para no duplicar esa lógica aquí),
+#     que a su vez importa streamlit (usa @st.cache_data). No se usa como servidor
+#     dentro del notebook, solo como dependencia de import.
+
+yfinance>=1.5.2
+pandas>=3.0.5
+numpy>=2.5.1
+matplotlib>=3.11.1
+scipy>=1.18.0
+prophet>=1.3.0
+pillow>=12.3.0
+ipython>=9.16.1
+openpyxl>=3.1.5
+ipykernel>=7.3.0
+streamlit>=1.38

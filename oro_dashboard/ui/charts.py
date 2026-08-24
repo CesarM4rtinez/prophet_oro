@@ -111,35 +111,138 @@ def add_level_lines(fig: go.Figure, entry=None, stoploss=None, target1=None, tar
     return fig
 
 
-def add_entry_sl_tp(fig: go.Figure, entrada=None, stop_loss=None, take_profit=None) -> go.Figure:
-    """Como `add_level_lines` pero con etiquetas Entrada/SL/TP (un solo take-profit),
-    para paneles de estructura multi-temporalidad donde no hay Target1/Target2."""
-    levels = [
-        (entrada, COLORS["text_secondary"], "Entrada"),
-        (stop_loss, COLORS["bear"], "SL"),
-        (take_profit, COLORS["bull"], "TP"),
-    ]
-    for value, color, label in levels:
-        if value is None:
+def _legend_proxy(fig: go.Figure, x0, y0, color: str, name: str, symbol: str = "square") -> None:
+    """Traza minima (un punto) solo para que `name`/`color` aparezcan en la leyenda,
+    usada por overlays basados en `add_shape` (rectangulos), que no generan leyenda propia."""
+    fig.add_trace(
+        go.Scatter(
+            x=[x0], y=[y0], mode="markers",
+            marker=dict(color=color, size=8, symbol=symbol),
+            name=name, hoverinfo="skip",
+        )
+    )
+
+
+def add_zone_rectangles(fig: go.Figure, df: pd.DataFrame, zones: list[dict], source_df: pd.DataFrame | None = None) -> go.Figure:
+    """zones: [{start_idx, end_idx, top, bottom, kind: 'bullish'|'bearish', status: 'continuo'|'fallo'|...}]
+
+    `source_df`: si las zonas fueron detectadas en un timeframe distinto al que se
+    esta graficando (ej. zonas de 1h dibujadas sobre un grafico de 5m), se usa para
+    resolver los indices de las zonas a timestamps reales."""
+    index_source = source_df if source_df is not None else df
+    n = len(index_source.index)
+    view_start, view_end = df.index[0], df.index[-1]
+    for zone in zones:
+        color = COLORS["bull"] if zone["kind"] == "bullish" else COLORS["bear"]
+        failed = zone.get("status") == "fallo"
+        x0 = index_source.index[max(0, min(zone["start_idx"], n - 1))]
+        x1 = index_source.index[max(0, min(zone["end_idx"], n - 1))]
+        if x1 < view_start or x0 > view_end:
             continue
-        fig.add_hline(
-            y=value, line_dash="dash", line_color=color, line_width=1.5,
-            annotation_text=f"{label}: {value:,.2f}", annotation_font_color=color, annotation_position="right",
+        x0, x1 = max(x0, view_start), min(x1, view_end)
+        fig.add_shape(
+            type="rect", x0=x0, x1=x1, y0=zone["bottom"], y1=zone["top"],
+            fillcolor=color, opacity=0.05 if failed else 0.14,
+            line=dict(color=color, width=1, dash="dot" if failed else "solid"), layer="below",
+        )
+
+    kinds = {zone["kind"] for zone in zones}
+    if "bullish" in kinds:
+        _legend_proxy(fig, df.index[0], df["close"].iloc[0], COLORS["bull"], "Order Block alcista")
+    if "bearish" in kinds:
+        _legend_proxy(fig, df.index[0], df["close"].iloc[0], COLORS["bear"], "Order Block bajista")
+    return fig
+
+
+def add_bos_choch_labels(fig: go.Figure, df: pd.DataFrame, zones: list[dict], mss: dict | None = None) -> go.Figure:
+    """Etiqueta los quiebres de estructura: "BOS" en cada ruptura que genero un order
+    block (`zones`), y "CHoCH" en el ultimo Market Structure Shift (`mss`, de
+    `label_structure`) si se provee."""
+    n = len(df.index)
+    for zone in zones:
+        idx = max(0, min(zone["break_idx"], n - 1))
+        color = COLORS["bull"] if zone["kind"] == "bullish" else COLORS["bear"]
+        fig.add_annotation(
+            x=df.index[idx], y=zone["broken_level"], text="BOS", showarrow=False,
+            yshift=10 if zone["kind"] == "bullish" else -10, font=dict(size=9, color=color),
+        )
+    if mss is not None:
+        idx = max(0, min(mss["idx"], n - 1))
+        color = COLORS["bull"] if mss["kind"] == "alcista" else COLORS["bear"]
+        fig.add_annotation(
+            x=df.index[idx], y=mss["level"], text="CHoCH", showarrow=False,
+            yshift=14 if mss["kind"] == "alcista" else -14,
+            font=dict(size=10, color=color, family="system-ui, -apple-system, Segoe UI, sans-serif"),
+            bgcolor="rgba(0,0,0,0.35)",
         )
     return fig
 
 
-def add_swing_markers(fig: go.Figure, df: pd.DataFrame) -> go.Figure:
-    """Marca los swing highs/lows detectados por `core.structure_mtf.detect_swings`."""
-    sh = df[df["swing_high"]]
-    sl = df[df["swing_low"]]
-    if len(sh):
-        fig.add_trace(
-            go.Scatter(x=sh.index, y=sh["high"], mode="markers", marker=dict(color=COLORS["bear"], size=8), name="Swing High")
+def add_fvg_zones(fig: go.Figure, df: pd.DataFrame, gaps: list[dict], forward_bars: int = 15) -> go.Figure:
+    """gaps: [{idx, top, bottom, kind: 'bullish'|'bearish', status: 'mitigado'|'sin_mitigar'}]"""
+    n = len(df.index)
+    for gap in gaps:
+        color = COLORS["bull"] if gap["kind"] == "bullish" else COLORS["bear"]
+        mitigated = gap.get("status") == "mitigado"
+        x0 = df.index[max(0, min(gap["idx"], n - 1))]
+        x1 = df.index[max(0, min(gap["idx"] + forward_bars, n - 1))]
+        fig.add_shape(
+            type="rect", x0=x0, x1=x1, y0=gap["bottom"], y1=gap["top"],
+            fillcolor=color, opacity=0.04 if mitigated else 0.10,
+            line=dict(color=color, width=1, dash="dot"), layer="below",
         )
-    if len(sl):
+
+    kinds = {gap["kind"] for gap in gaps}
+    if "bullish" in kinds:
+        _legend_proxy(fig, df.index[0], df["close"].iloc[0], COLORS["bull"], "FVG alcista", symbol="diamond")
+    if "bearish" in kinds:
+        _legend_proxy(fig, df.index[0], df["close"].iloc[0], COLORS["bear"], "FVG bajista", symbol="diamond")
+    return fig
+
+
+def add_liquidity_sweeps(fig: go.Figure, df: pd.DataFrame, sweeps: list[dict]) -> go.Figure:
+    """sweeps: [{idx, level, kind: 'bullish'|'bearish'}] (bullish = barrida de minimos, señal alcista)"""
+    if not sweeps:
+        return fig
+    for kind, color, symbol in (("bullish", COLORS["bull"], "x"), ("bearish", COLORS["bear"], "x")):
+        points = [s for s in sweeps if s["kind"] == kind]
+        if not points:
+            continue
         fig.add_trace(
-            go.Scatter(x=sl.index, y=sl["low"], mode="markers", marker=dict(color=COLORS["bull"], size=8), name="Swing Low")
+            go.Scatter(
+                x=[df.index[s["idx"]] for s in points], y=[s["level"] for s in points], mode="markers",
+                marker=dict(color=color, size=11, symbol=symbol, line=dict(width=2, color=color)),
+                name=f"Barrida de liquidez {'alcista' if kind == 'bullish' else 'bajista'}",
+            )
+        )
+    return fig
+
+
+def add_fibonacci_zone(fig: go.Figure, fib: dict) -> go.Figure:
+    """fib: salida de core.smc_zones.institutional_fibonacci"""
+    if not fib:
+        return fig
+    fig.add_hrect(
+        y0=fib["zone_bottom"], y1=fib["zone_top"],
+        fillcolor=COLORS["series_zone"], opacity=0.08, line_width=0, layer="below",
+    )
+    for label, value in fib["levels"].items():
+        fig.add_hline(
+            y=value, line_dash="dot", line_color=COLORS["series_zone"], line_width=1,
+            annotation_text=f"Fib {label}: {value:,.2f}",
+            annotation_font_color=COLORS["series_zone"], annotation_position="left",
+        )
+    return fig
+
+
+def add_structure_labels(fig: go.Figure, df: pd.DataFrame, swings: list[dict]) -> go.Figure:
+    """swings: [{idx, label: 'HH'|'HL'|'LL'|'LH', price}]"""
+    for swing in swings:
+        is_high = swing["label"] in ("HH", "LH")
+        color = COLORS["bull"] if swing["label"] in ("HH", "HL") else COLORS["bear"]
+        fig.add_annotation(
+            x=df.index[swing["idx"]], y=swing["price"], text=swing["label"], showarrow=False,
+            yshift=14 if is_high else -14, font=dict(size=10, color=color),
         )
     return fig
 
