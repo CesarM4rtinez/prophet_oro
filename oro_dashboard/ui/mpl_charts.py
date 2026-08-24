@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 MESES_ES = {
@@ -172,5 +173,83 @@ def structure_multi_timeframe_chart(
             f"{symbol_label} — Estructura Multi-Temporalidad (5m / 15m / 1h) — {titulo_veredicto}",
             fontsize=15, fontweight="bold",
         )
+        fig.tight_layout()
+    return fig
+
+
+def equity_trades_chart(trades: list[dict], equity: list[float], initial_capital: float, symbol_label: str) -> plt.Figure:
+    """Panel de equity + P/L por trade, al estilo de los reportes de backtest
+    (curva de capital arriba, resultado de cada trade abajo)."""
+    with plt.style.context("dark_background"):
+        fig, (ax_eq, ax_pnl) = plt.subplots(
+            2, 1, figsize=(12, 7), sharex=True, gridspec_kw={"height_ratios": [2, 1]},
+        )
+        exit_times = [t["exit_time"] for t in trades]
+        pnl_pct = [t["pnl_pct"] * 100 for t in trades]
+
+        ax_eq.plot(exit_times, equity, color="#3d7dff", linewidth=1.4, label="Capital")
+        ax_eq.axhline(initial_capital, color="#898781", linestyle="--", linewidth=1, label=f"Capital inicial: ${initial_capital:,.0f}")
+        ax_eq.set_title(f"{symbol_label} — Curva de Capital y P/L por Trade", fontsize=13, fontweight="bold")
+        ax_eq.set_ylabel("Capital (USD)")
+        ax_eq.legend(fontsize=8, loc="upper left")
+        ax_eq.grid(alpha=0.3)
+
+        colors = ["#0ca30c" if p > 0 else "#d03b3b" for p in pnl_pct]
+        ax_pnl.scatter(exit_times, pnl_pct, color=colors, s=26, zorder=5)
+        ax_pnl.axhline(0, color="#898781", linewidth=1)
+        ax_pnl.set_ylabel("P/L por trade (%)")
+        ax_pnl.set_xlabel("Cierre del trade")
+        ax_pnl.grid(alpha=0.3)
+        fig.autofmt_xdate(rotation=30, ha="right")
+        fig.tight_layout()
+    return fig
+
+
+def price_with_trades_chart(df: pd.DataFrame, trades: list[dict], symbol_label: str) -> plt.Figure:
+    """Precio + marcadores de entrada (compra, triangulo verde) y salida (venta,
+    triangulo rojo) de cada trade simulado, con volumen debajo."""
+    with plt.style.context("dark_background"):
+        fig, (ax_price, ax_vol) = plt.subplots(
+            2, 1, figsize=(12, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]},
+        )
+        ax_price.plot(df.index, df["close"], color="#00bfff", linewidth=1.0, label=symbol_label)
+
+        entry_times = [t["entry_time"] for t in trades]
+        entry_prices = [t["entry_price"] for t in trades]
+        exit_times = [t["exit_time"] for t in trades]
+        exit_prices = [t["exit_price"] for t in trades]
+        ax_price.scatter(entry_times, entry_prices, marker="^", color="lime", s=45, zorder=5, label="Entrada")
+        ax_price.scatter(exit_times, exit_prices, marker="v", color="red", s=45, zorder=5, label="Salida")
+
+        ax_price.set_title(f"{symbol_label} — Precio con Entradas/Salidas Simuladas", fontsize=13, fontweight="bold")
+        ax_price.set_ylabel("Precio (USD)")
+        ax_price.legend(fontsize=8, loc="upper left")
+        ax_price.grid(alpha=0.3)
+
+        if "volume" in df.columns:
+            ax_vol.bar(df.index, df["volume"], color="#383835", width=(df.index[1] - df.index[0]) * 0.8)
+        ax_vol.set_ylabel("Volumen")
+        ax_vol.set_xlabel("Fecha")
+        ax_vol.grid(alpha=0.2)
+        fig.autofmt_xdate(rotation=30, ha="right")
+        fig.tight_layout()
+    return fig
+
+
+def strategy_comparison_chart(dates, series: dict[str, np.ndarray], symbol_label: str) -> plt.Figure:
+    """Comparacion de retorno acumulado (%) de varias series de equity/precio
+    normalizadas al mismo punto de partida, una linea por serie."""
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(12, 5.5))
+        palette = ["#3d7dff", "#898781", "#33d17a", "#d95926", "#c98500", "#d55181"]
+        for (label, values), color in zip(series.items(), palette):
+            ax.plot(dates, values, linewidth=1.6 if label != "Buy & Hold" else 1.2, color=color, label=label)
+        ax.axhline(0, color="#898781", linewidth=0.8, linestyle=":")
+        ax.set_title(f"{symbol_label} — Comparacion de Retorno Acumulado", fontsize=13, fontweight="bold")
+        ax.set_ylabel("Retorno acumulado (%)")
+        ax.set_xlabel("Fecha")
+        ax.legend(fontsize=8, loc="upper left")
+        ax.grid(alpha=0.3)
+        fig.autofmt_xdate(rotation=30, ha="right")
         fig.tight_layout()
     return fig

@@ -10,7 +10,8 @@ from core import config
 from core.calendar import IMPACTO_COLOR, events_naive
 from core.data import fetch_interval
 from core.probability import backtest_by_trend, backtest_targets, backtest_targets_intrabar, direction_levels
-from core.smc_zones import cached_multi_timeframe_probability, detect_swings, multi_timeframe_bias
+from core.smc_zones import multi_timeframe_bias
+from core.structure_naive import nearest_liquidity_target, own_trend
 from core.timeutil import current_session_label, to_new_york_time
 from core.state import render_refresh_control
 from ui.charts import add_calendar_events, add_level_lines, add_update_marker, candlestick_chart, grouped_bar_chart
@@ -231,31 +232,35 @@ st.caption(
 
 @st.fragment(run_every=refresh_seconds or None)
 def render_structure_mtf() -> None:
-    mtf_prob = cached_multi_timeframe_probability()
-
     panels = []
+    tendencias: dict[str, str | None] = {}
     for label in ("1h", "15m", "5m"):
         df_tf = fetch_interval(label)
         if df_tf.empty or len(df_tf) < 60:
             continue
-        swings_df = detect_swings(df_tf, lookback=5).tail(150)
-        info = mtf_prob["per_timeframe"].get(label)
-        panels.append(
-            {
-                "label": label,
-                "df": swings_df,
-                "kind": info["kind"] if info else None,
-                "entry": info["current_price"] if info else None,
-                "sl": info["zone"]["sl"] if info else None,
-                "tp": info["zone"]["tp"] if info else None,
-            }
-        )
+        swings, tendencia = own_trend(df_tf)
+        tendencias[label] = tendencia
+
+        entry = sl = tp = kind = None
+        if tendencia is not None:
+            entry = float(df_tf["close"].iloc[-1])
+            tp = nearest_liquidity_target(swings, tendencia, entry)
+            sl = float(df_tf["low"].tail(20).min()) if tendencia == "alcista" else float(df_tf["high"].tail(20).max())
+            kind = "bullish" if tendencia == "alcista" else "bearish"
+
+        panels.append({"label": label, "df": swings.tail(150), "kind": kind, "entry": entry, "sl": sl, "tp": tp})
 
     if not panels:
         st.warning("No hay suficientes velas en 1h/15m/5m para la estructura multi-temporalidad ahora mismo.")
         return
 
-    veredicto = {"bullish": "alcista", "bearish": "bajista"}.get(mtf_prob["aligned_kind"]) if mtf_prob["aligned"] else None
+    if sum(1 for t in tendencias.values() if t == "alcista") == 3:
+        veredicto = "alcista"
+    elif sum(1 for t in tendencias.values() if t == "bajista") == 3:
+        veredicto = "bajista"
+    else:
+        veredicto = None
+
     fig_mtf = structure_multi_timeframe_chart(panels, symbol_label=config.SYMBOL_LABEL, veredicto=veredicto)
     st.pyplot(fig_mtf, width="stretch")
     plt.close(fig_mtf)
