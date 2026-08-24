@@ -89,6 +89,14 @@ def inject_css() -> None:
             padding: 14px 16px;
         }}
         div[data-testid="stMetricLabel"] {{ color: {COLORS["text_muted"]}; }}
+        div[data-testid="stMetricValue"], div[data-testid="stMetricValue"] * {{
+            font-size: 1.5rem !important;
+            line-height: 1.25 !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: anywhere !important;
+        }}
         .oro-badge {{
             display: inline-block;
             padding: 3px 10px;
