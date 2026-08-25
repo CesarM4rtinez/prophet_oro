@@ -20,16 +20,22 @@ from .smc_zones import detect_swings
 SWING_LOOKBACK = 3
 
 
-def own_trend(df: pd.DataFrame, lookback: int = SWING_LOOKBACK) -> tuple[pd.DataFrame, str | None]:
-    """(df_con_swings, tendencia): tendencia es la direccion del ULTIMO quiebre de
-    estructura (cierre que supera el ultimo swing high/low vigente) en toda la
-    serie, o None si no hubo ninguno todavia."""
+def own_trend(df: pd.DataFrame, lookback: int = SWING_LOOKBACK) -> tuple[pd.DataFrame, str | None, list[dict]]:
+    """(df_con_swings, tendencia, quiebres): tendencia es la direccion del ULTIMO
+    quiebre de estructura (cierre que supera el ultimo swing high/low vigente) en toda
+    la serie, o None si no hubo ninguno todavia. `quiebres` es la lista COMPLETA de
+    quiebres detectados, cada uno etiquetado "BOS" (a favor de la tendencia que ya
+    estaba vigente, continuacion) o "CHoCH" (en contra de la tendencia previa, cambio
+    de estructura) — el ultimo CHoCH de la lista es el punto donde vale la pena mirar
+    una entrada potencial en la nueva direccion, a diferencia de un BOS que solo
+    confirma que la tendencia existente sigue viva."""
     swings = detect_swings(df, lookback=lookback)
     highs, lows, closes = df["high"].to_numpy(), df["low"].to_numpy(), df["close"].to_numpy()
     sh_flags, sl_flags = swings["swing_high"].to_numpy(), swings["swing_low"].to_numpy()
 
     ultimo_sh = ultimo_sl = None
     tendencia: str | None = None
+    quiebres: list[dict] = []
     for i in range(len(df)):
         if sh_flags[i]:
             ultimo_sh = (i, highs[i])
@@ -37,13 +43,21 @@ def own_trend(df: pd.DataFrame, lookback: int = SWING_LOOKBACK) -> tuple[pd.Data
             ultimo_sl = (i, lows[i])
 
         if ultimo_sh is not None and i > ultimo_sh[0] and closes[i] > ultimo_sh[1]:
+            quiebres.append({
+                "idx": i, "level": float(ultimo_sh[1]), "kind": "alcista",
+                "tipo": "CHoCH" if tendencia == "bajista" else "BOS",
+            })
             ultimo_sh = None
             tendencia = "alcista"
         elif ultimo_sl is not None and i > ultimo_sl[0] and closes[i] < ultimo_sl[1]:
+            quiebres.append({
+                "idx": i, "level": float(ultimo_sl[1]), "kind": "bajista",
+                "tipo": "CHoCH" if tendencia == "alcista" else "BOS",
+            })
             ultimo_sl = None
             tendencia = "bajista"
 
-    return swings, tendencia
+    return swings, tendencia, quiebres
 
 
 def nearest_liquidity_target(

@@ -240,12 +240,15 @@ st.caption(
 def render_structure_mtf() -> None:
     panels = []
     tendencias: dict[str, str | None] = {}
+    choch_recientes: list[tuple[str, dict]] = []
     for label in ("1h", "15m", "5m"):
         df_tf = fetch_interval(label)
         if df_tf.empty or len(df_tf) < 60:
             continue
-        swings, tendencia = own_trend(df_tf)
+        swings, tendencia, quiebres = own_trend(df_tf)
         tendencias[label] = tendencia
+        if quiebres and quiebres[-1]["tipo"] == "CHoCH":
+            choch_recientes.append((label, quiebres[-1]))
 
         entry = sl = tp = kind = None
         if tendencia is not None:
@@ -254,20 +257,45 @@ def render_structure_mtf() -> None:
             sl = float(df_tf["low"].tail(20).min()) if tendencia == "alcista" else float(df_tf["high"].tail(20).max())
             kind = "bullish" if tendencia == "alcista" else "bearish"
 
-        panels.append({"label": label, "df": swings.tail(150), "kind": kind, "entry": entry, "sl": sl, "tp": tp})
+        panel_df = swings.tail(150)
+        breaks = [
+            {"time": swings.index[q["idx"]], "level": q["level"], "kind": q["kind"], "tipo": q["tipo"]}
+            for q in quiebres if q["idx"] >= len(swings) - 150
+        ]
+        panels.append({
+            "label": label, "df": panel_df, "kind": kind, "entry": entry, "sl": sl, "tp": tp, "breaks": breaks,
+        })
 
     if not panels:
         st.warning("No hay suficientes velas en 1h/15m/5m para la estructura multi-temporalidad ahora mismo.")
         return
 
-    if sum(1 for t in tendencias.values() if t == "alcista") == 3:
-        veredicto = "alcista"
-    elif sum(1 for t in tendencias.values() if t == "bajista") == 3:
-        veredicto = "bajista"
+    # Mayoria (2/3), no unanimidad (3/3): exigir que las 3 temporalidades coincidan
+    # a la vez casi nunca ocurre en la practica, asi que el veredicto quedaba "SIN
+    # CONFIRMACION" de forma casi permanente — igual criterio de 2-de-3 que ya usa
+    # `multi_timeframe_probability`/`multi_timeframe_bias` en core/smc_zones.py.
+    alcistas = [tf for tf, t in tendencias.items() if t == "alcista"]
+    bajistas = [tf for tf, t in tendencias.items() if t == "bajista"]
+    if len(alcistas) >= 2:
+        veredicto, alineadas, divergentes = "alcista", len(alcistas), [tf for tf in tendencias if tf not in alcistas]
+    elif len(bajistas) >= 2:
+        veredicto, alineadas, divergentes = "bajista", len(bajistas), [tf for tf in tendencias if tf not in bajistas]
     else:
-        veredicto = None
+        veredicto, alineadas, divergentes = None, 0, []
 
-    fig_mtf = structure_multi_timeframe_chart(panels, symbol_label=config.SYMBOL_LABEL, veredicto=veredicto)
+    if choch_recientes:
+        detalle = ", ".join(
+            f"{tf} (CHoCH {q['kind']} en ${q['level']:,.2f})" for tf, q in choch_recientes
+        )
+        st.info(
+            f"🔄 Cambio de estructura reciente sin BOS de continuacion todavia: {detalle}. "
+            "Posible entrada temprana en la nueva direccion, pero sin la confirmacion de "
+            "manipulacion (AMD) ni retest que exige la Estrategia Institucional — usar con cautela."
+        )
+
+    fig_mtf = structure_multi_timeframe_chart(
+        panels, symbol_label=config.SYMBOL_LABEL, veredicto=veredicto, alineadas=alineadas, divergentes=divergentes,
+    )
     st.pyplot(fig_mtf, width="stretch")
     plt.close(fig_mtf)
 

@@ -51,7 +51,7 @@ def targets_price_chart(
         ax.axhline(target2, color="#33d17a", linestyle="--", label=f"Target 2: {target2:,.2f}")
         ax.axvline(df.index[-1], color="magenta", linestyle=":", linewidth=1.5, zorder=5,
                    label=f"Actualizado: {updated_at_label}")
-
+        
         ax.set_title(
             f"{symbol_label} - Probabilidad Condicional de Targets por Patron — {direction_label} (15m)",
             fontsize=13, fontweight="bold",
@@ -136,13 +136,17 @@ def structure_multi_timeframe_chart(
     panels: list[dict],
     symbol_label: str,
     veredicto: str | None,
+    alineadas: int = 0,
+    divergentes: list[str] | None = None,
 ) -> plt.Figure:
     """3 paneles apilados (uno por temporalidad), cada uno con su tendencia vigente,
-    swings marcados y sus propias lineas de Entrada/SL/TP.
+    swings marcados, marcadores BOS/CHoCH en cada quiebre de estructura, y sus propias
+    lineas de Entrada/SL/TP.
 
     `panels`: [{"label": "1h"/"15m"/"5m", "df": DataFrame con columnas close/high/low/
     swing_high/swing_low, "kind": "bullish"/"bearish"/None, "entry": float|None,
-    "sl": float|None, "tp": float|None}]
+    "sl": float|None, "tp": float|None, "breaks": [{"time", "level", "kind", "tipo":
+    "BOS"|"CHoCH"}, ...] ya recortados a las velas mostradas}]
     """
     with plt.style.context("dark_background"):
         fig, axes = plt.subplots(len(panels), 1, figsize=(11, 4.3 * len(panels)))
@@ -161,6 +165,30 @@ def structure_multi_timeframe_chart(
             ax.scatter(swing_high.index, swing_high["high"], color="red", s=22, zorder=5, label="Swing High")
             ax.scatter(swing_low.index, swing_low["low"], color="lime", s=22, zorder=5, label="Swing Low")
 
+            # CHoCH = quiebre en contra de la tendencia previa (posible entrada temprana
+            # en la nueva direccion); BOS = quiebre a favor de la tendencia vigente
+            # (solo confirma que sigue viva, no es una señal nueva).
+            bos_labeled = choch_labeled = False
+            for brk in panel.get("breaks", []):
+                is_choch = brk["tipo"] == "CHoCH"
+                color = "yellow" if is_choch else ("lime" if brk["kind"] == "alcista" else "red")
+                marker = "*" if is_choch else "^" if brk["kind"] == "alcista" else "v"
+                size = 160 if is_choch else 70
+                label = None
+                if is_choch and not choch_labeled:
+                    label, choch_labeled = "CHoCH (cambio de estructura)", True
+                elif not is_choch and not bos_labeled:
+                    label, bos_labeled = "BOS (continuacion)", True
+                ax.scatter(
+                    [brk["time"]], [brk["level"]], color=color, marker=marker, s=size,
+                    zorder=6, edgecolors="white" if is_choch else "none", linewidths=0.8, label=label,
+                )
+
+            ax.set_title(
+                f"{panel['label']} — tendencia vigente: {trend_label}",
+                color=color_trend, fontsize=12, fontweight="bold",
+            )
+
             if panel.get("entry") is not None:
                 ax.axhline(panel["entry"], color="blue", linestyle="--", linewidth=1.2,
                            label=f"Entrada: {panel['entry']:,.2f}")
@@ -171,15 +199,15 @@ def structure_multi_timeframe_chart(
                 ax.axhline(panel["tp"], color="lime", linestyle="--", linewidth=1.2,
                            label=f"TP: {panel['tp']:,.2f}")
 
-            ax.set_title(
-                f"{panel['label']} — tendencia vigente: {trend_label}",
-                color=color_trend, fontsize=12, fontweight="bold",
-            )
             ax.legend(fontsize=7, loc="upper left", ncol=2)
             ax.grid(alpha=0.3)
             _format_x_axis(ax, df_tf.index)
 
-        titulo_veredicto = "SIN CONFIRMACION — no operar" if veredicto is None else f"SENAL {veredicto.upper()}"
+        if veredicto is None:
+            div_txt = f" (diverge: {', '.join(divergentes)})" if divergentes else ""
+            titulo_veredicto = f"SIN CONFIRMACION — no operar{div_txt}"
+        else:
+            titulo_veredicto = f"SENAL {veredicto.upper()} ({alineadas}/3)"
         fig.suptitle(
             f"{symbol_label} — Estructura Multi-Temporalidad (5m / 15m / 1h) — {titulo_veredicto}",
             fontsize=15, fontweight="bold",

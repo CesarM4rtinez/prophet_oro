@@ -153,6 +153,15 @@ def render() -> None:
     sc3.metric("Tasa de fallo", f"{structure_stats['fallo_pct']:.1f}%")
 
     structure_label_info = label_structure(df_structure)
+    structure_mss = structure_label_info["mss"]
+    if structure_mss is not None and structure_mss["idx"] >= len(df_structure) - 10:
+        mss_time = df_structure.index[structure_mss["idx"]]
+        st.success(
+            f"🔀 Cambio de estructura (CHoCH) reciente en {config.ICT_STRUCTURE_INTERVAL}: giro "
+            f"{structure_mss['kind']} en ${structure_mss['level']:,.2f} ({mss_time.strftime('%d/%m %H:%M')}). "
+            "Posible entrada temprana en la nueva direccion — buscar retest de la zona y barrida de "
+            "liquidez (AMD) antes de operar, todavia no aparece en la tabla de entradas de alta probabilidad."
+        )
 
     fig_structure = candlestick_chart(df_structure, title=f"{config.SYMBOL_LABEL} ({config.ICT_STRUCTURE_INTERVAL}) — Estructura")
     add_zone_rectangles(fig_structure, df_structure, result["structure_zones"])

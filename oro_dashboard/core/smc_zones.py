@@ -189,49 +189,61 @@ def zone_stats(zones: list[dict]) -> dict:
 
 def label_structure(df: pd.DataFrame, lookback: int = 5) -> dict:
     """Clasifica los swings confirmados como HH/HL/LL/LH (comparando cada swing contra
-    el swing anterior del mismo tipo), determina el sesgo vigente por mayoria de los
-    ultimos swings, y localiza el ultimo Market Structure Shift (MSS): un cierre que
-    rompe en contra del sesgo vigente."""
+    el swing anterior del mismo tipo) y determina el sesgo vigente recorriendo la serie
+    cronologicamente: el sesgo es la direccion del ULTIMO quiebre de estructura (cierre
+    que supera el ultimo swing high/low vigente, que queda "consumido" para no volver a
+    disparar en las velas siguientes) — misma logica que `structure_naive.own_trend` y
+    la celda "Estructura Multi-Temporal" de los notebooks.
+
+    ANTES el sesgo salia de una votacion por mayoria entre los ultimos 4 swings
+    HH/HL/LL/LH: con un empate 2-2 (frecuente) quedaba en "indefinido", y como el
+    Market Structure Shift (MSS) solo se buscaba en la direccion de ESE sesgo ya fijo,
+    un "indefinido" bloqueaba el MSS para siempre (nunca `bias == "alcista"` ni
+    `"bajista"`, asi que ninguna rama del if/elif se ejecutaba jamas) — el sesgo quedaba
+    pegado en "indefinido" para toda la sesion sin importar cuanto se moviera el precio.
+    Con el sesgo evolucionando quiebre a quiebre, el MSS es simplemente el ultimo
+    quiebre que fue en CONTRA del sesgo previo (CHoCH), a diferencia de un quiebre a
+    favor del sesgo vigente (BOS, continuacion)."""
     swings = detect_swings(df, lookback=lookback)
     high, low, close = df["high"].to_numpy(), df["low"].to_numpy(), df["close"].to_numpy()
+    sh_flags, sl_flags = swings["swing_high"].to_numpy(), swings["swing_low"].to_numpy()
     n = len(df)
 
     labeled: list[dict] = []
     prev_high = prev_low = None
     for i in range(n):
-        if swings["swing_high"].iloc[i]:
+        if sh_flags[i]:
             if prev_high is not None:
                 label = "HH" if high[i] > prev_high else "LH"
                 labeled.append({"idx": i, "label": label, "price": float(high[i])})
             prev_high = high[i]
-        if swings["swing_low"].iloc[i]:
+        if sl_flags[i]:
             if prev_low is not None:
                 label = "HL" if low[i] > prev_low else "LL"
                 labeled.append({"idx": i, "label": label, "price": float(low[i])})
             prev_low = low[i]
     labeled.sort(key=lambda s: s["idx"])
 
-    recent = labeled[-4:]
-    bullish_votes = sum(1 for s in recent if s["label"] in ("HH", "HL"))
-    bearish_votes = sum(1 for s in recent if s["label"] in ("LL", "LH"))
-    if bullish_votes > bearish_votes:
-        bias = "alcista"
-    elif bearish_votes > bullish_votes:
-        bias = "bajista"
-    else:
-        bias = "indefinido"
-
+    bias = "indefinido"
     mss = None
-    last_sh_idx = last_sh_val = last_sl_idx = last_sl_val = None
+    last_sh_idx = last_sh_val = None
+    last_sl_idx = last_sl_val = None
     for i in range(n):
-        if swings["swing_high"].iloc[i]:
+        if sh_flags[i]:
             last_sh_idx, last_sh_val = i, high[i]
-        if swings["swing_low"].iloc[i]:
+        if sl_flags[i]:
             last_sl_idx, last_sl_val = i, low[i]
-        if bias == "alcista" and last_sl_idx is not None and i > last_sl_idx and close[i] < last_sl_val:
-            mss = {"idx": i, "kind": "bajista", "level": float(last_sl_val)}
-        elif bias == "bajista" and last_sh_idx is not None and i > last_sh_idx and close[i] > last_sh_val:
-            mss = {"idx": i, "kind": "alcista", "level": float(last_sh_val)}
+
+        if last_sh_idx is not None and i > last_sh_idx and close[i] > last_sh_val:
+            if bias == "bajista":
+                mss = {"idx": i, "kind": "alcista", "level": float(last_sh_val)}
+            bias = "alcista"
+            last_sh_idx = None
+        elif last_sl_idx is not None and i > last_sl_idx and close[i] < last_sl_val:
+            if bias == "alcista":
+                mss = {"idx": i, "kind": "bajista", "level": float(last_sl_val)}
+            bias = "bajista"
+            last_sl_idx = None
 
     return {"bias": bias, "swings": labeled, "mss": mss}
 
