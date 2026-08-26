@@ -242,29 +242,36 @@ def render_structure_mtf() -> None:
     tendencias: dict[str, str | None] = {}
     choch_recientes: list[tuple[str, dict]] = []
     for label in ("1h", "15m", "5m"):
-        df_tf = fetch_interval(label)
-        if df_tf.empty or len(df_tf) < 60:
+        try:
+            df_tf = fetch_interval(label)
+            if df_tf.empty or len(df_tf) < 60:
+                continue
+            swings, tendencia, quiebres = own_trend(df_tf)
+            tendencias[label] = tendencia
+            if quiebres and quiebres[-1]["tipo"] == "CHoCH":
+                choch_recientes.append((label, quiebres[-1]))
+
+            entry = sl = tp = kind = None
+            if tendencia is not None:
+                entry = float(df_tf["close"].iloc[-1])
+                tp = nearest_liquidity_target(swings, tendencia, entry)
+                sl = (
+                    float(df_tf["low"].tail(20).min()) if tendencia == "alcista"
+                    else float(df_tf["high"].tail(20).max())
+                )
+                kind = "bullish" if tendencia == "alcista" else "bearish"
+
+            panel_df = swings.tail(150)
+            breaks = [
+                {"time": swings.index[q["idx"]], "level": q["level"], "kind": q["kind"], "tipo": q["tipo"]}
+                for q in quiebres if q["idx"] >= len(swings) - 150
+            ]
+            panels.append({
+                "label": label, "df": panel_df, "kind": kind, "entry": entry, "sl": sl, "tp": tp, "breaks": breaks,
+            })
+        except Exception as exc:  # datos de yfinance a veces llegan incompletos/corruptos
+            st.warning(f"No se pudo calcular la estructura de {label} ahora mismo ({exc!r}). Se omite este panel.")
             continue
-        swings, tendencia, quiebres = own_trend(df_tf)
-        tendencias[label] = tendencia
-        if quiebres and quiebres[-1]["tipo"] == "CHoCH":
-            choch_recientes.append((label, quiebres[-1]))
-
-        entry = sl = tp = kind = None
-        if tendencia is not None:
-            entry = float(df_tf["close"].iloc[-1])
-            tp = nearest_liquidity_target(swings, tendencia, entry)
-            sl = float(df_tf["low"].tail(20).min()) if tendencia == "alcista" else float(df_tf["high"].tail(20).max())
-            kind = "bullish" if tendencia == "alcista" else "bearish"
-
-        panel_df = swings.tail(150)
-        breaks = [
-            {"time": swings.index[q["idx"]], "level": q["level"], "kind": q["kind"], "tipo": q["tipo"]}
-            for q in quiebres if q["idx"] >= len(swings) - 150
-        ]
-        panels.append({
-            "label": label, "df": panel_df, "kind": kind, "entry": entry, "sl": sl, "tp": tp, "breaks": breaks,
-        })
 
     if not panels:
         st.warning("No hay suficientes velas en 1h/15m/5m para la estructura multi-temporalidad ahora mismo.")
