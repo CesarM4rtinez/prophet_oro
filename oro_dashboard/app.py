@@ -49,6 +49,7 @@ def home_page() -> None:
         ("🎯 Probabilidad de Targets", "Backtest de probabilidad global, por regimen de tendencia y cruzado con el calendario economico."),
         ("🕗 Plan Killzone NY", "Entrada/SL/TP para la sesion de Nueva York, con eventos economicos del dia."),
         ("🧠 Estrategia Institucional (SMC)", "Sesgo diario + order blocks 1h + barridas de liquidez confirmadas (AMD) + RR minimo antes de listar un setup."),
+        ("📊 Panel BI (15m/5m)", "Direccion en 15m via continuacion de estructura (BOS) + entrada en 5m via quiebre de estructura alineado — KPIs, señal Entry/SL/TP y graficos."),
         ("🧪 Backtest de Estrategia", "Simulacion de trades secuenciales: curva de capital, P/L por trade, entradas/salidas sobre el precio y comparacion contra Buy & Hold."),
     ]
     cols = st.columns(3)
@@ -68,6 +69,7 @@ pages = {
         st.Page("pages/probability.py", title="Probabilidad de Targets", icon="🎯"),
         st.Page("pages/killzone.py", title="Plan Killzone NY", icon="🕗"),
         st.Page("pages/structure_mtf.py", title="Estrategia Institucional (SMC)", icon="🧠"),
+        st.Page("pages/bi_15m_5m.py", title="Panel BI (15m/5m)", icon="📊"),
         st.Page("pages/backtest.py", title="Backtest de Estrategia", icon="🧪"),
     ],
 }

@@ -114,10 +114,72 @@ def inject_css() -> None:
             padding: 16px 18px;
             margin-bottom: 10px;
         }}
+        .oro-kpi-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }}
+        .oro-rule-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }}
+        .oro-kpi-tile {{
+            background-color: {COLORS["bg_surface"]};
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 14px 16px 16px;
+            position: relative;
+            overflow: hidden;
+            height: 100%;
+        }}
+        .oro-kpi-tile .accent {{ position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }}
+        .oro-kpi-tile .label {{
+            font-size: 0.72rem; color: {COLORS["text_muted"]}; text-transform: uppercase;
+            letter-spacing: 0.04em; margin-bottom: 8px;
+        }}
+        .oro-kpi-tile .value {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; color: {COLORS["text_primary"]}; }}
+        .oro-kpi-tile .delta {{ font-size: 0.74rem; margin-top: 6px; color: {COLORS["text_muted"]}; }}
+        .oro-rule-card {{
+            background-color: {COLORS["bg_surface"]};
+            border: 1px solid rgba(255,255,255,0.08);
+            border-left: 3px solid {COLORS["series_hist"]};
+            border-radius: 10px;
+            padding: 13px 16px;
+            height: 100%;
+        }}
+        .oro-rule-card h4 {{ margin: 0 0 6px; font-size: 0.84rem; color: {COLORS["text_primary"]}; }}
+        .oro-rule-card p {{ margin: 0; font-size: 0.8rem; color: {COLORS["text_secondary"]}; line-height: 1.55; }}
+        .oro-rule-card.done {{ border-left-color: {COLORS["bull"]}; }}
+        .oro-rule-card.pending {{ border-left-color: {COLORS["warning"]}; }}
+        .oro-signal-pill {{
+            display: inline-flex; align-items: center; gap: 8px; font-weight: 800;
+            font-size: 1.15rem; padding: 9px 20px; border-radius: 999px; letter-spacing: 0.02em;
+        }}
+        .oro-signal-pill.buy {{ background: rgba(12,163,12,0.18); color: #3ddc3d; border: 1px solid rgba(12,163,12,0.5); }}
+        .oro-signal-pill.sell {{ background: rgba(208,59,59,0.18); color: #ff6b6b; border: 1px solid rgba(208,59,59,0.5); }}
+        .oro-signal-pill.wait {{ background: rgba(250,178,25,0.15); color: #ffce6a; border: 1px solid rgba(250,178,25,0.45); }}
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_kpi_tile(label: str, value: str, delta: str = "", accent: str = "") -> str:
+    """HTML de una tarjeta KPI compacta (grid de resumen tipo BI). Devuelve el
+    string para componer varias en una sola llamada a `st.markdown` (evita el
+    parpadeo de N llamadas sueltas)."""
+    accent = accent or COLORS["series_hist"]
+    delta_html = f'<div class="delta">{delta}</div>' if delta else ""
+    return (
+        f'<div class="oro-kpi-tile"><div class="accent" style="background:{accent}"></div>'
+        f'<div class="label">{label}</div><div class="value">{value}</div>{delta_html}</div>'
+    )
+
+
+def render_rule_card(number: int, title: str, text: str, status: str = "") -> str:
+    """HTML de una tarjeta de regla (metodologia) con estado 'done'/'pending'/''."""
+    status_class = f" {status}" if status in ("done", "pending") else ""
+    return (
+        f'<div class="oro-rule-card{status_class}"><h4>{number}. {title}</h4><p>{text}</p></div>'
+    )
+
+
+def render_signal_pill(kind: str, text: str) -> str:
+    """kind: 'buy' | 'sell' | 'wait'."""
+    return f'<span class="oro-signal-pill {kind}">{text}</span>'
 
 
 def render_data_status(when: datetime, session_label: str) -> None:

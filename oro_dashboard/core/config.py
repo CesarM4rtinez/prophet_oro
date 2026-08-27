@@ -58,3 +58,15 @@ PROBABILITY_ANALOG_TOLERANCE = 0.5  # +/- 50% de la altura de zona relativa al A
 PROBABILITY_RECENT_STRUCTURE_N = 30
 PROBABILITY_RETEST_WARNING_PCT = 35.0
 PROBABILITY_SIGNAL_TP_FRACTIONS = (0.2, 0.4, 0.6, 0.8, 1.0)
+
+# --- Panel BI: direccion 15m / entrada 5m, core/mtf_signal.py ------------------
+
+# Cascada de DOS temporalidades (deliberadamente distinta de la cascada de 3 de
+# ICT_*: el usuario pidio explicitamente una regla mas simple y directa —
+# direccion en 15m via continuacion de estructura, entrada en 5m via cualquier
+# quiebre de estructura alineado con esa direccion).
+BI_DIRECTION_INTERVAL = "15m"
+BI_ENTRY_INTERVAL = "5m"
+# Ventana de "reciente" para el quiebre de 5m (en velas): un quiebre viejo ya no
+# es un disparador de entrada valido, solo historia.
+BI_ENTRY_RECENT_BARS = 12
