@@ -1,9 +1,16 @@
-streamlit>=1.38
-plotly>=5.22
-matplotlib>=3.8
-yfinance>=0.2.40
-pandas>=2.2
-numpy>=1.26
-scipy>=1.11
-prophet>=1.1.5
-openpyxl>=3.1
+# Cotas superiores agregadas a proposito: un ImportError en pages/bi_15m_5m.py
+# en Streamlit Cloud (Python 3.14) no se reprodujo localmente ni con las
+# versiones ya instaladas ni con streamlit 1.62/plotly 7.0/pandas 3.0/numpy 2.5
+# recien instaladas — sospecha de un entorno de pip cacheado/parcial en Cloud
+# desde un build anterior. Este cambio fuerza una reinstalacion limpia; las
+# cotas quedan un poco por encima de lo verificado localmente como red de
+# seguridad, no como fijacion estricta.
+streamlit>=1.38,<2.0
+plotly>=5.22,<8.0
+matplotlib>=3.8,<4.0
+yfinance>=0.2.40,<2.0
+pandas>=2.2,<4.0
+numpy>=1.26,<3.0
+scipy>=1.11,<2.0
+prophet>=1.1.5,<2.0
+openpyxl>=3.1,<4.0
