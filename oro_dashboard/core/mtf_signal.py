@@ -1,16 +1,18 @@
-"""Señal MTF de 2 temporalidades: direccion en 15m, entrada en 5m — regla pedida
-explicitamente por el usuario (mas simple y directa que la cascada de 3
-temporalidades de `core.smc_zones.multi_timeframe_bias`):
+"""Señal MTF de 2 temporalidades, generica en cuanto a que par de temporalidades
+se le pase (direccion/entrada) — regla pedida explicitamente por el usuario (mas
+simple y directa que la cascada de 3 temporalidades de
+`core.smc_zones.multi_timeframe_bias`). Alimenta dos cascadas en
+`pages/bi_15m_5m.py`: 15m (direccion) / 5m (entrada), y 1h (direccion) / 15m
+(entrada) — mismas 4 reglas, un nivel de temporalidad mas arriba:
 
-1. Direccion: 15m.
-2. Entrada: 5m.
-3. En la temporalidad de entrada (5m): buscar un QUIEBRE de estructura (BOS o
-   CHoCH, cualquiera de los dos) alineado con la direccion de 15m — ese quiebre
-   es el disparador de entrada.
-4. En la temporalidad de direccion (15m): buscar una CONTINUACION de estructura
-   (BOS, no un CHoCH recien ocurrido) — la direccion solo se da por confirmada
-   si el ultimo quiebre en 15m confirma la tendencia vigente, no si la acaba de
-   cambiar.
+1. Direccion: la temporalidad superior de cada cascada (15m o 1h).
+2. Entrada: la temporalidad inferior de cada cascada (5m o 15m).
+3. En la temporalidad de entrada: buscar un QUIEBRE de estructura (BOS o CHoCH,
+   cualquiera de los dos) alineado con la direccion superior — ese quiebre es
+   el disparador de entrada.
+4. En la temporalidad de direccion: buscar una CONTINUACION de estructura (BOS,
+   no un CHoCH recien ocurrido) — la direccion solo se da por confirmada si el
+   ultimo quiebre confirma la tendencia vigente, no si la acaba de cambiar.
 
 Usa el motor `core.structure_naive.own_trend` (no el motor maduro con retest+AMD
 de `core.smc_zones`) a proposito: la regla pedida es dos temporalidades sin
@@ -19,13 +21,14 @@ Institucional (SMC)" (1d/1h/5m, con retest+AMD).
 
 Distingue dos posiciones:
 - `preview`: la mejor posicion LARGA/CORTA proyectable con los datos actuales —
-  requiere solo que 15m tenga tendencia definida y que exista ALGUN quiebre
-  historico en 5m a favor de esa tendencia (no exige que sea el ultimo ni que
-  sea reciente). Pensada para dibujarse siempre que se pueda en el grafico
-  (regla 3/4 de "smoke test" visual, no de trading).
+  requiere solo que la temporalidad de direccion tenga tendencia definida y que
+  exista ALGUN quiebre historico en la de entrada a favor de esa tendencia (no
+  exige que sea el ultimo ni que sea reciente). Pensada para dibujarse siempre
+  que se pueda en el grafico (referencia visual, no de trading).
 - `signal`: subconjunto de `preview` que ademas cumple las 4 reglas completas
-  (BOS de continuacion en 15m + quiebre reciente y alineado en 5m) — la unica
-  que se considera una señal operable de verdad."""
+  (BOS de continuacion en la temporalidad de direccion + quiebre reciente y
+  alineado en la de entrada) — la unica que se considera una señal operable de
+  verdad."""
 from __future__ import annotations
 
 import pandas as pd
@@ -57,8 +60,9 @@ def _build_position(
     return {"direction": direction, "entry": entry_price, "sl": sl, "tp": tp, "rr": reward / risk, "trigger": trigger}
 
 
-def mtf_15m_5m_signal(df_direction: pd.DataFrame, df_entry: pd.DataFrame, lookback: int = 5) -> dict:
-    """`df_direction` = velas de 15m, `df_entry` = velas de 5m."""
+def mtf_direction_entry_signal(df_direction: pd.DataFrame, df_entry: pd.DataFrame, lookback: int = 5) -> dict:
+    """`df_direction` = velas de la temporalidad de direccion (15m o 1h),
+    `df_entry` = velas de la temporalidad de entrada (5m o 15m)."""
     swings_dir, trend_dir, breaks_dir = own_trend(df_direction, lookback=lookback)
     swings_entry, trend_entry, breaks_entry = own_trend(df_entry, lookback=lookback)
 

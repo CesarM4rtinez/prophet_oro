@@ -59,19 +59,27 @@ PROBABILITY_RECENT_STRUCTURE_N = 30
 PROBABILITY_RETEST_WARNING_PCT = 35.0
 PROBABILITY_SIGNAL_TP_FRACTIONS = (0.2, 0.4, 0.6, 0.8, 1.0)
 
-# --- Panel BI: direccion 15m / entrada 5m, core/mtf_signal.py ------------------
+# --- Panel BI: cascadas de 2 temporalidades, core/mtf_signal.py ---------------
 
-# Cascada de DOS temporalidades (deliberadamente distinta de la cascada de 3 de
-# ICT_*: el usuario pidio explicitamente una regla mas simple y directa —
-# direccion en 15m via continuacion de estructura, entrada en 5m via cualquier
-# quiebre de estructura alineado con esa direccion).
-BI_DIRECTION_INTERVAL = "15m"
-BI_ENTRY_INTERVAL = "5m"
-# Ventana de "reciente" para el quiebre de 5m (en velas): un quiebre viejo ya no
-# es un disparador de entrada valido, solo historia.
+# Cada cascada es DOS temporalidades (deliberadamente distinta de la cascada de
+# 3 de ICT_*: el usuario pidio explicitamente una regla mas simple y directa —
+# direccion via continuacion de estructura, entrada via cualquier quiebre de
+# estructura alineado con esa direccion). La segunda cascada (1h/15m) es la
+# misma regla un nivel de temporalidad mas arriba que la primera (15m/5m),
+# pedida explicitamente para comparar ambas en el mismo panel.
+BI_CASCADES = (
+    {"direction": "15m", "entry": "5m", "label": "15m → 5m"},
+    {"direction": "1h", "entry": "15m", "label": "1h → 15m"},
+)
+# Ventana de "reciente" para el quiebre de entrada (en velas de esa
+# temporalidad): un quiebre viejo ya no es un disparador de entrada valido,
+# solo historia. Se reutiliza para ambas cascadas: 12 velas de 5m (~1h) o de
+# 15m (~3h) son, en proporcion a su propia temporalidad de direccion, una
+# ventana de "reciente" comparable.
 BI_ENTRY_RECENT_BARS = 12
 # Ventana (mas amplia) para la posicion de VISTA PREVIA del grafico: busca el
-# quiebre valido mas reciente dentro de esta cantidad de velas de 5m (~25h) en
-# vez de exigir que sea el ULTIMO quiebre — a diferencia de la señal operable
-# (BI_ENTRY_RECENT_BARS), esto es solo una referencia visual, no un gatillo.
+# quiebre valido mas reciente dentro de esta cantidad de velas de la
+# temporalidad de entrada, en vez de exigir que sea el ULTIMO quiebre — a
+# diferencia de la señal operable (BI_ENTRY_RECENT_BARS), esto es solo una
+# referencia visual, no un gatillo.
 BI_PREVIEW_LOOKBACK_BARS = 300
