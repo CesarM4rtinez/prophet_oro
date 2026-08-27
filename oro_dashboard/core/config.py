@@ -70,3 +70,8 @@ BI_ENTRY_INTERVAL = "5m"
 # Ventana de "reciente" para el quiebre de 5m (en velas): un quiebre viejo ya no
 # es un disparador de entrada valido, solo historia.
 BI_ENTRY_RECENT_BARS = 12
+# Ventana (mas amplia) para la posicion de VISTA PREVIA del grafico: busca el
+# quiebre valido mas reciente dentro de esta cantidad de velas de 5m (~25h) en
+# vez de exigir que sea el ULTIMO quiebre — a diferencia de la señal operable
+# (BI_ENTRY_RECENT_BARS), esto es solo una referencia visual, no un gatillo.
+BI_PREVIEW_LOOKBACK_BARS = 300

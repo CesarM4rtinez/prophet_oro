@@ -12,6 +12,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.patches import Rectangle
 
 MESES_ES = {
     1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun",
@@ -212,6 +213,117 @@ def structure_multi_timeframe_chart(
             f"{symbol_label} — Estructura Multi-Temporalidad (5m / 15m / 1h) — {titulo_veredicto}",
             fontsize=15, fontweight="bold",
         )
+        fig.tight_layout()
+    return fig
+
+
+def mtf_zone_chart(
+    df: pd.DataFrame,
+    swings: pd.DataFrame,
+    breaks: list[dict],
+    trend: str | None,
+    symbol_label: str,
+    interval_label: str,
+    role_label: str,
+    position: dict | None = None,
+    position_confirmed: bool = False,
+    max_zones: int = 6,
+    window: int = 200,
+    forward_bars: int = 20,
+) -> plt.Figure:
+    """Precio + zonas horizontales de estructura (rectangulos, no lineas ni texto
+    suelto) para el panel BI de direccion 15m / entrada 5m: cada quiebre reciente
+    se dibuja como una zona que va desde el swing que la origino hasta la vela
+    que la rompio (BOS = borde discontinuo, CHoCH = borde solido y mas opaco, es
+    el cambio de estructura). Si se pasa `position` (salida de
+    `core.mtf_signal._build_position`), se agrega ademas la "posicion" larga
+    (verde) o corta (roja) proyectada desde el quiebre disparador hacia adelante
+    -zona de beneficio (entrada→TP) y zona de riesgo (entrada→SL)-, con trazo
+    solido si `position_confirmed` (señal completa) o discontinuo/mas tenue si
+    es solo una vista previa (todavia no cumple las 4 reglas)."""
+    with plt.style.context("dark_background"):
+        fig, ax = plt.subplots(figsize=(12, 6))
+        reciente = df.tail(window)
+        corte = len(df) - len(reciente)
+        swings_reciente = swings.tail(window)
+
+        ax.plot(reciente.index, reciente["close"], color="#00bfff", linewidth=1.1, label=symbol_label, zorder=2)
+        sh = swings_reciente[swings_reciente["swing_high"]]
+        sl_pts = swings_reciente[swings_reciente["swing_low"]]
+        ax.scatter(sh.index, sh["high"], color="red", s=16, zorder=3, label="Swing High", alpha=0.7)
+        ax.scatter(sl_pts.index, sl_pts["low"], color="lime", s=16, zorder=3, label="Swing Low", alpha=0.7)
+
+        price_span = reciente["high"].max() - reciente["low"].min()
+        band = max(price_span * 0.018, 1e-6)
+        visible_breaks = [b for b in breaks if b["idx"] >= corte][-max_zones:]
+        for brk in visible_breaks:
+            swing_idx = brk.get("swing_idx", brk["idx"])
+            x0 = df.index[max(0, swing_idx)]
+            x1 = df.index[min(brk["idx"], len(df) - 1)]
+            if x1 <= x0:
+                continue
+            color = "lime" if brk["kind"] == "alcista" else "red"
+            is_choch = brk["tipo"] == "CHoCH"
+            ax.add_patch(
+                Rectangle(
+                    (x0, brk["level"] - band / 2), x1 - x0, band,
+                    facecolor=color, edgecolor=color, alpha=0.4 if is_choch else 0.2,
+                    linewidth=1.4 if is_choch else 0.9, linestyle="-" if is_choch else "--",
+                    zorder=2.5,
+                    label=f"Zona {brk['tipo']} {'alcista' if brk['kind'] == 'alcista' else 'bajista'}",
+                )
+            )
+
+        x_right = reciente.index[-1]
+        if position is not None:
+            entry, sl, tp, direction = position["entry"], position["sl"], position["tp"], position["direction"]
+            trigger = position.get("trigger")
+            freq = df.index[1] - df.index[0] if len(df) > 1 else pd.Timedelta(minutes=5)
+            trigger_idx = trigger["idx"] if trigger is not None else len(df) - 1
+            x0 = df.index[min(max(0, trigger_idx), len(df) - 1)]
+            x1 = df.index[-1] + forward_bars * freq
+            x_right = x1
+            solid = position_confirmed
+            reward_lo, reward_hi = sorted([entry, tp])
+            risk_lo, risk_hi = sorted([entry, sl])
+            pos_label = "LARGO" if direction == "BUY" else "CORTO"
+            ax.add_patch(
+                Rectangle(
+                    (x0, reward_lo), x1 - x0, reward_hi - reward_lo,
+                    facecolor="lime", alpha=0.28 if solid else 0.12, edgecolor="lime",
+                    linewidth=1.6 if solid else 1.0, linestyle="-" if solid else "--",
+                    zorder=4, label=f"Zona de beneficio ({pos_label})",
+                )
+            )
+            ax.add_patch(
+                Rectangle(
+                    (x0, risk_lo), x1 - x0, risk_hi - risk_lo,
+                    facecolor="red", alpha=0.28 if solid else 0.12, edgecolor="red",
+                    linewidth=1.6 if solid else 1.0, linestyle="-" if solid else "--",
+                    zorder=4, label="Zona de riesgo",
+                )
+            )
+            ax.axhline(entry, color="white", linestyle=":", linewidth=1.2, zorder=5, label=f"Entrada: {entry:,.2f}")
+            ax.axhline(tp, color="lime", linestyle="--", linewidth=1.2, zorder=5, label=f"TP: {tp:,.2f}")
+            ax.axhline(sl, color="red", linestyle="--", linewidth=1.2, zorder=5, label=f"SL: {sl:,.2f}")
+
+        trend_label = {"alcista": "ALCISTA", "bajista": "BAJISTA"}.get(trend, "SIN DATO")
+        color_trend = {"alcista": "lime", "bajista": "red"}.get(trend, "gray")
+        status_txt = ""
+        if position is not None:
+            estado = "SEÑAL CONFIRMADA" if position_confirmed else "posición proyectada (vista previa)"
+            status_txt = f" — {estado} ({'LARGO' if position['direction'] == 'BUY' else 'CORTO'})"
+        ax.set_title(
+            f"{symbol_label} — {role_label} ({interval_label}) — tendencia: {trend_label}{status_txt}",
+            color=color_trend, fontsize=12, fontweight="bold",
+        )
+        ax.set_ylabel("Precio (USD)")
+        ax.set_xlim(reciente.index[0], x_right)
+        handles, labels = ax.get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        ax.legend(by_label.values(), by_label.keys(), fontsize=7.5, loc="upper left", ncol=2)
+        ax.grid(alpha=0.3)
+        fig.autofmt_xdate(rotation=30, ha="right")
         fig.tight_layout()
     return fig
 

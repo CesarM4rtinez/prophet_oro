@@ -44,14 +44,14 @@ def own_trend(df: pd.DataFrame, lookback: int = SWING_LOOKBACK) -> tuple[pd.Data
 
         if ultimo_sh is not None and i > ultimo_sh[0] and closes[i] > ultimo_sh[1]:
             quiebres.append({
-                "idx": i, "level": float(ultimo_sh[1]), "kind": "alcista",
+                "idx": i, "swing_idx": ultimo_sh[0], "level": float(ultimo_sh[1]), "kind": "alcista",
                 "tipo": "CHoCH" if tendencia == "bajista" else "BOS",
             })
             ultimo_sh = None
             tendencia = "alcista"
         elif ultimo_sl is not None and i > ultimo_sl[0] and closes[i] < ultimo_sl[1]:
             quiebres.append({
-                "idx": i, "level": float(ultimo_sl[1]), "kind": "bajista",
+                "idx": i, "swing_idx": ultimo_sl[0], "level": float(ultimo_sl[1]), "kind": "bajista",
                 "tipo": "CHoCH" if tendencia == "alcista" else "BOS",
             })
             ultimo_sl = None

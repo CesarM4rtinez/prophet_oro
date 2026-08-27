@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -12,13 +12,7 @@ from core.data import fetch_interval
 from core.mtf_signal import mtf_15m_5m_signal
 from core.state import render_refresh_control
 from core.timeutil import current_session_label, to_new_york_time
-from ui.charts import (
-    add_level_lines,
-    add_peaks_valleys,
-    add_quiebres_labels,
-    add_update_marker,
-    candlestick_chart,
-)
+from ui.mpl_charts import mtf_zone_chart
 from ui.theme import inject_css, render_data_status, render_kpi_tile, render_rule_card, render_signal_pill
 
 inject_css()
@@ -36,12 +30,6 @@ refresh_seconds = render_refresh_control()
 
 _BIAS_ARROW = {"alcista": "↑", "bajista": "↓"}
 _TIPO_LABEL = {"BOS": "BOS · continuación", "CHoCH": "CHoCH · cambio de estructura"}
-
-
-def _swing_marker_idx(swings: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    peak_idx = np.where(swings["swing_high"].to_numpy())[0]
-    valley_idx = np.where(swings["swing_low"].to_numpy())[0]
-    return peak_idx, valley_idx
 
 
 def _quiebres_table(df: pd.DataFrame, quiebres: list[dict]) -> pd.DataFrame:
@@ -73,6 +61,7 @@ def render() -> None:
 
     trend_dir = result["trend_dir"]
     signal = result["signal"]
+    preview = result["preview"]
 
     # --- KPIs -------------------------------------------------------------
     dir_label = f"{_BIAS_ARROW.get(trend_dir, '→')} {trend_dir.capitalize()}" if trend_dir else "Sin datos"
@@ -142,6 +131,13 @@ def render() -> None:
         if not motivos:
             motivos.append("el RR resultante no queda del lado correcto del precio")
         st.caption("Falta: " + "; ".join(motivos) + ".")
+        if preview:
+            st.caption(
+                f"📐 Vista previa en el gráfico de entrada: posición {'LARGA' if preview['direction'] == 'BUY' else 'CORTA'} "
+                f"proyectada (zonas mas tenues, borde discontinuo) usando el quiebre {preview['trigger']['tipo']} "
+                f"mas reciente de {config.BI_ENTRY_INTERVAL} a favor de {config.BI_DIRECTION_INTERVAL} — todavia no es una señal, "
+                "es solo una referencia de cómo se vería."
+            )
 
     # --- Reglas de la metodologia -------------------------------------------
     st.markdown("##### Reglas de la metodología")
@@ -166,31 +162,37 @@ def render() -> None:
     # --- Grafico direccion (15m) --------------------------------------------
     st.markdown("---")
     st.markdown(f"#### Dirección — continuación de estructura ({config.BI_DIRECTION_INTERVAL})")
-    fig_dir = candlestick_chart(df_direction, title=f"{config.SYMBOL_LABEL} ({config.BI_DIRECTION_INTERVAL}) — Dirección")
-    peak_idx, valley_idx = _swing_marker_idx(result["swings_dir"])
-    add_peaks_valleys(fig_dir, df_direction, peak_idx, valley_idx)
-    add_quiebres_labels(fig_dir, df_direction, result["breaks_dir"][-20:])
-    add_update_marker(fig_dir, to_new_york_time(df_direction.index[-1]))
-    st.plotly_chart(fig_dir, width="stretch")
+    fig_dir = mtf_zone_chart(
+        df_direction, result["swings_dir"], result["breaks_dir"], trend_dir,
+        config.SYMBOL_LABEL, config.BI_DIRECTION_INTERVAL, "Dirección",
+        max_zones=6, window=200,
+    )
+    st.pyplot(fig_dir, width="stretch")
+    plt.close(fig_dir)
 
     if result["breaks_dir"]:
         st.dataframe(_quiebres_table(df_direction, result["breaks_dir"]), width="stretch", hide_index=True)
-    st.caption("BOS = quiebre a favor de la tendencia vigente (continuación) · CHoCH = quiebre en contra (cambio de estructura).")
+    st.caption("Zonas: quiebre BOS (continuación, borde discontinuo) · quiebre CHoCH (cambio de estructura, borde solido y mas opaco).")
 
     # --- Grafico entrada (5m) ------------------------------------------------
     st.markdown("---")
     st.markdown(f"#### Entrada — quiebre de estructura ({config.BI_ENTRY_INTERVAL})")
-    fig_entry = candlestick_chart(df_entry, title=f"{config.SYMBOL_LABEL} ({config.BI_ENTRY_INTERVAL}) — Entrada")
-    peak_idx_e, valley_idx_e = _swing_marker_idx(result["swings_entry"])
-    add_peaks_valleys(fig_entry, df_entry, peak_idx_e, valley_idx_e)
-    add_quiebres_labels(fig_entry, df_entry, result["breaks_entry"][-20:])
-    if signal:
-        add_level_lines(fig_entry, entry=signal["entry"], stoploss=signal["sl"], target1=signal["tp"])
-    add_update_marker(fig_entry, to_new_york_time(df_entry.index[-1]))
-    st.plotly_chart(fig_entry, width="stretch")
+    fig_entry = mtf_zone_chart(
+        df_entry, result["swings_entry"], result["breaks_entry"], trend_dir,
+        config.SYMBOL_LABEL, config.BI_ENTRY_INTERVAL, "Entrada",
+        position=(signal or preview), position_confirmed=bool(signal),
+        max_zones=5, window=150,
+    )
+    st.pyplot(fig_entry, width="stretch")
+    plt.close(fig_entry)
 
     if result["breaks_entry"]:
         st.dataframe(_quiebres_table(df_entry, result["breaks_entry"]), width="stretch", hide_index=True)
+    st.caption(
+        "Posición LARGA (verde) o CORTA (roja): zona de beneficio (entrada→TP) y zona de riesgo "
+        "(entrada→SL), proyectadas hacia adelante desde el quiebre disparador. Trazo solido = señal "
+        "confirmada (4 reglas) · trazo discontinuo = vista previa (dirección definida pero sin confirmar)."
+    )
 
 
 render()

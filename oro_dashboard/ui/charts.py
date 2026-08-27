@@ -178,25 +178,6 @@ def add_bos_choch_labels(fig: go.Figure, df: pd.DataFrame, zones: list[dict], ms
     return fig
 
 
-def add_quiebres_labels(fig: go.Figure, df: pd.DataFrame, quiebres: list[dict]) -> go.Figure:
-    """quiebres: salida de core.structure_naive.own_trend — cada uno con
-    idx/level/kind ('alcista'|'bajista')/tipo ('BOS'|'CHoCH'). A diferencia de
-    `add_bos_choch_labels` (que etiqueta zonas/MSS del motor `core.smc_zones`),
-    esta funcion etiqueta la lista de quiebres cruda del motor `own_trend`."""
-    n = len(df.index)
-    for q in quiebres:
-        idx = max(0, min(q["idx"], n - 1))
-        color = COLORS["bull"] if q["kind"] == "alcista" else COLORS["bear"]
-        is_choch = q["tipo"] == "CHoCH"
-        fig.add_annotation(
-            x=df.index[idx], y=q["level"], text=q["tipo"], showarrow=False,
-            yshift=12 if q["kind"] == "alcista" else -12,
-            font=dict(size=10 if is_choch else 9, color=color, family="system-ui, -apple-system, Segoe UI, sans-serif"),
-            bgcolor="rgba(0,0,0,0.35)" if is_choch else None,
-        )
-    return fig
-
-
 def add_fvg_zones(fig: go.Figure, df: pd.DataFrame, gaps: list[dict], forward_bars: int = 15) -> go.Figure:
     """gaps: [{idx, top, bottom, kind: 'bullish'|'bearish', status: 'mitigado'|'sin_mitigar'}]"""
     n = len(df.index)
