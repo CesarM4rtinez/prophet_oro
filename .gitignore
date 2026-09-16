@@ -14,6 +14,11 @@ __pycache__/
 # Jupyter
 .ipynb_checkpoints/
 
+# Informes de backtesting: se regeneran en cada ejecucion de proyecciones_oro.ipynb
+# (ver backtesting_oro/README.md). No se versionan por tamano/timestamp; el
+# codigo fuente que los genera (backtesting_oro/) si se versiona.
+informes_backtesting_oro/
+
 # Archivos de sistema
 .DS_Store
 Thumbs.db
