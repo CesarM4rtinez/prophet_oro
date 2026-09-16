@@ -1,0 +1,14 @@
+streamlit>=1.38
+plotly>=5.22
+ccxt>=4.3
+yfinance>=0.2.40
+prophet>=1.1.5
+pandas>=2.2
+numpy>=1.26
+scipy>=1.11
+requests>=2.31
+python-dotenv>=1.0
+openpyxl>=3.1
+backtesting>=0.6
+quantstats>=0.0.62
+scikit-learn>=1.5
