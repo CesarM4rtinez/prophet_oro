@@ -16,7 +16,7 @@ from core.timeutil import current_session_label, to_new_york_time
 from core.state import render_refresh_control
 from ui.charts import add_calendar_events, add_level_lines, add_update_marker, candlestick_chart, grouped_bar_chart
 from ui.insight_cards import mini_bar_chart, render_insight_card
-from ui.mpl_charts import mtf_zone_chart, structure_multi_timeframe_chart, structure_smc_chart, targets_price_chart
+from ui.mpl_charts import context_probability_chart, structure_multi_timeframe_chart, structure_smc_chart, targets_price_chart
 from ui.theme import COLORS, inject_css, render_data_status
 
 inject_css()
@@ -270,9 +270,7 @@ def render_structure_mtf() -> None:
             panels.append({
                 "label": label, "df": panel_df, "kind": kind, "entry": entry, "sl": sl, "tp": tp, "breaks": breaks,
             })
-            # Datos SIN recortar (df_tf/swings/quiebres completos): la seccion de
-            # posiciones proyectadas de mas abajo reutiliza mtf_zone_chart, que ya
-            # recorta a su propia ventana de "recientes" (window=90) por su cuenta.
+            # Datos sin recortar para los gráficos adicionales de esta sección.
             datos_tf[label] = {
                 "df_tf": df_tf, "swings": swings, "quiebres": quiebres,
                 "tendencia": tendencia, "entry": entry, "sl": sl, "tp": tp,
@@ -314,33 +312,14 @@ def render_structure_mtf() -> None:
     st.pyplot(fig_mtf, width="stretch")
     plt.close(fig_mtf)
 
-    st.markdown("###### 💰 Posiciones proyectadas — Largo (Compra) o Corto (Venta)")
-    st.caption(
-        "Misma tendencia y niveles de arriba, pero dibujados como la posicion misma (mismo estilo que "
-        "el Panel BI Multi-Timeframe): zona de beneficio (verde, Entrada→TP) y zona de riesgo (rojo, "
-        "Entrada→SL) proyectadas desde el ultimo quiebre de estructura de cada temporalidad. Trazo "
-        "solido = esta temporalidad coincide con el veredicto de las 3 (señal confirmada); trazo "
-        "punteado = vista propia de esa temporalidad, todavia sin confirmar con las otras dos."
-    )
-    for label in ("1h", "15m", "5m"):
-        info = datos_tf.get(label)
-        if info is None or info["tendencia"] is None or info["tp"] is None:
-            st.caption(f"**{label}:** sin tendencia u objetivo de liquidez identificado todavia — sin posicion que proyectar.")
-            continue
-        trigger = info["quiebres"][-1]
-        position = {
-            "entry": info["entry"], "sl": info["sl"], "tp": info["tp"],
-            "direction": "BUY" if info["tendencia"] == "alcista" else "SELL",
-            "trigger": trigger,
-        }
-        confirmada = veredicto is not None and info["tendencia"] == veredicto
-        fig_pos = mtf_zone_chart(
-            info["df_tf"], info["swings"], info["quiebres"], info["tendencia"],
-            symbol_label=config.SYMBOL_LABEL, interval_label=label, role_label="Posicion propia",
-            position=position, position_confirmed=confirmada, window=90,
+    info_15m = datos_tf.get("15m")
+    if info_15m is not None:
+        st.markdown("###### Lectura probabilística")
+        fig_probability = context_probability_chart(
+            info_15m["df_tf"], info_15m["quiebres"], config.SYMBOL_LABEL,
         )
-        st.pyplot(fig_pos, width="stretch")
-        plt.close(fig_pos)
+        st.pyplot(fig_probability, width="stretch")
+        plt.close(fig_probability)
 
 
 render_structure_mtf()

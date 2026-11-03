@@ -150,3 +150,95 @@ def backtest_by_trend(
             "Muestras": [buckets[r]["Total"] for r in buckets],
         }
     )
+
+
+def context_probability_summary(
+    df: pd.DataFrame,
+    breaks: list[dict],
+    history_bars: int = 180,
+    horizon_bars: int = 12,
+    threshold: float = 0.003,
+) -> tuple[pd.DataFrame, list[str], list[float], list[int]]:
+    """Calcula la lectura probabilística contextual para los quiebres recientes."""
+    data = df.copy()
+    for column in ("close", "high", "low"):
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    price_range = data["high"] - data["low"]
+    atr = price_range.rolling(14, min_periods=5).mean()
+    window_range = data["high"].rolling(8, min_periods=5).max() - data["low"].rolling(8, min_periods=5).min()
+    prices = data["close"].to_numpy(dtype=float)
+    start = max(0, len(data) - history_bars)
+    observations: list[dict] = []
+
+    for item in breaks:
+        index = int(item["idx"])
+        if index < start or index >= len(data):
+            continue
+        atr_value = float(atr.iloc[index]) if pd.notna(atr.iloc[index]) else np.nan
+        range_value = float(window_range.iloc[index]) if pd.notna(window_range.iloc[index]) else np.nan
+        if not np.isfinite(atr_value) or atr_value <= 0:
+            continue
+
+        history = data.iloc[:index]
+        highs = history.loc[history["high"] == history["high"].rolling(7, center=True).max(), "high"]
+        lows = history.loc[history["low"] == history["low"].rolling(7, center=True).min(), "low"]
+        price = float(prices[index])
+        distance_high = abs(price - float(highs.iloc[-1])) if not highs.empty else np.inf
+        distance_low = abs(price - float(lows.iloc[-1])) if not lows.empty else np.inf
+        direction = "alcista" if item["kind"] == "alcista" else "bajista"
+        objective = price * (1 + threshold) if direction == "alcista" else price * (1 - threshold)
+        invalidation = price * (1 - threshold) if direction == "alcista" else price * (1 + threshold)
+        result: bool | None = None
+        for future in prices[index + 1 : min(len(prices), index + 1 + horizon_bars)]:
+            if direction == "alcista":
+                if future <= invalidation:
+                    result = False
+                    break
+                if future >= objective:
+                    result = True
+                    break
+            else:
+                if future >= invalidation:
+                    result = False
+                    break
+                if future <= objective:
+                    result = True
+                    break
+        if result is None:
+            continue
+
+        structure = str(item.get("tipo", "BOS"))
+        observations.append(
+            {
+                "idx": index,
+                "estructura": structure,
+                "confirmaciones": int(item.get("confirmaciones", 2 if structure == "BOS" else 1)),
+                "consolidacion": bool(range_value <= 2.0 * atr_value),
+                "liquidez": min(distance_high, distance_low) <= 0.75 * atr_value,
+                "resultado": result,
+            }
+        )
+
+    context = pd.DataFrame(
+        observations,
+        columns=["idx", "estructura", "confirmaciones", "consolidacion", "liquidez", "resultado"],
+    )
+    conditions = {
+        "Todos los quiebres": pd.Series(True, index=context.index),
+        "Confirmación 2/2": context["confirmaciones"] >= 2,
+        "En consolidación": context["consolidacion"],
+        "Cerca de liquidez": context["liquidez"],
+        "Cambio de estructura": context["estructura"] == "CHoCH",
+        "Continuación": context["estructura"] == "BOS",
+    }
+    labels: list[str] = []
+    probabilities: list[float] = []
+    sizes: list[int] = []
+    for label, mask in conditions.items():
+        results = context.loc[mask, "resultado"].dropna().astype(bool)
+        size = int(results.size)
+        probabilities.append((int(results.sum()) + 1) / (size + 2) * 100)
+        sizes.append(size)
+        labels.append(label)
+    return context, labels, probabilities, sizes

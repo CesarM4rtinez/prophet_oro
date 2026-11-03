@@ -161,30 +161,6 @@ def structure_multi_timeframe_chart(
             color_trend = {"bullish": "lime", "bearish": "red"}.get(kind, "gray")
 
             ax.plot(df_tf.index, df_tf["close"], color="#00bfff", linewidth=1.1, label=symbol_label)
-            swing_high = df_tf[df_tf["swing_high"]]
-            swing_low = df_tf[df_tf["swing_low"]]
-            ax.scatter(swing_high.index, swing_high["high"], color="red", s=22, zorder=5, label="Swing High")
-            ax.scatter(swing_low.index, swing_low["low"], color="lime", s=22, zorder=5, label="Swing Low")
-
-            # CHoCH = quiebre en contra de la tendencia previa (posible entrada temprana
-            # en la nueva direccion); BOS = quiebre a favor de la tendencia vigente
-            # (solo confirma que sigue viva, no es una señal nueva).
-            bos_labeled = choch_labeled = False
-            for brk in panel.get("breaks", []):
-                is_choch = brk["tipo"] == "CHoCH"
-                color = "yellow" if is_choch else ("lime" if brk["kind"] == "alcista" else "red")
-                marker = "*" if is_choch else "^" if brk["kind"] == "alcista" else "v"
-                size = 160 if is_choch else 70
-                label = None
-                if is_choch and not choch_labeled:
-                    label, choch_labeled = "CHoCH (cambio de estructura)", True
-                elif not is_choch and not bos_labeled:
-                    label, bos_labeled = "BOS (continuacion)", True
-                ax.scatter(
-                    [brk["time"]], [brk["level"]], color=color, marker=marker, s=size,
-                    zorder=6, edgecolors="white" if is_choch else "none", linewidths=0.8, label=label,
-                )
-
             ax.set_title(
                 f"{panel['label']} — tendencia vigente: {trend_label}",
                 color=color_trend, fontsize=12, fontweight="bold",
@@ -245,14 +221,7 @@ def mtf_zone_chart(
         fig, ax = plt.subplots(figsize=(12, 6))
         reciente = df.tail(window)
         corte = len(df) - len(reciente)
-        swings_reciente = swings.tail(window)
-
         ax.plot(reciente.index, reciente["close"], color="#00bfff", linewidth=1.1, label=symbol_label, zorder=2)
-        sh = swings_reciente[swings_reciente["swing_high"]]
-        sl_pts = swings_reciente[swings_reciente["swing_low"]]
-        ax.scatter(sh.index, sh["high"], color="red", s=16, zorder=3, label="Swing High", alpha=0.7)
-        ax.scatter(sl_pts.index, sl_pts["low"], color="lime", s=16, zorder=3, label="Swing Low", alpha=0.7)
-
         price_span = reciente["high"].max() - reciente["low"].min()
         band = max(price_span * 0.018, 1e-6)
         visible_breaks = [b for b in breaks if b["idx"] >= corte][-max_zones:]
@@ -325,6 +294,56 @@ def mtf_zone_chart(
         ax.grid(alpha=0.3)
         fig.autofmt_xdate(rotation=30, ha="right")
         fig.tight_layout()
+    return fig
+
+
+def context_probability_chart(
+    df: pd.DataFrame,
+    breaks: list[dict],
+    symbol_label: str,
+) -> plt.Figure:
+    """Precio reciente y probabilidades contextuales por tipo de quiebre."""
+    from core.probability import context_probability_summary
+
+    _, labels, probabilities, sizes = context_probability_summary(df, breaks)
+    with plt.style.context("dark_background"):
+        fig, (price_ax, probability_ax) = plt.subplots(
+            2, 1, figsize=(13, 9), gridspec_kw={"height_ratios": [2.2, 1.3]},
+        )
+        recent = df.tail(180)
+        price_ax.plot(recent.index, recent["close"], color="#00bfff", linewidth=1.2, label=symbol_label)
+        price_ax.set_title(
+            f"Contexto de liquidez y estructura (15m)",
+            fontsize=12, fontweight="bold",
+        )
+        price_ax.set_ylabel("Precio")
+        price_ax.legend(fontsize=8, loc="upper left")
+        price_ax.grid(alpha=0.25)
+        _format_x_axis(price_ax, recent.index)
+
+        colors = ["#2ca02c" if value >= 60 else "#f2a900" if value >= 50 else "#d62728" for value in probabilities]
+        y_positions = np.arange(len(probabilities))
+        probability_ax.barh(y_positions, probabilities, color=colors, alpha=0.85)
+        probability_ax.set_yticks(y_positions, labels=[f"{label} (n={size})" for label, size in zip(labels, sizes)])
+        probability_ax.set_xlim(0, 100)
+        probability_ax.set_xlabel("Probabilidad histórica suavizada (%)")
+        probability_ax.set_title("Probabilidad de alcanzar objetivo antes de invalidación", fontsize=11, fontweight="bold")
+        probability_ax.axvline(50, color="gray", linestyle=":", linewidth=1)
+        for y, value in zip(y_positions, probabilities):
+            probability_ax.text(min(value + 1, 96), y, f"{value:.1f}%", va="center", fontsize=9)
+        probability_ax.invert_yaxis()
+        probability_ax.grid(axis="x", alpha=0.25)
+        fig.suptitle(
+            f"Lectura probabilística — {symbol_label} — precio actual: {float(df['close'].iloc[-1]):.2f}",
+            fontsize=15, fontweight="bold",
+        )
+        fig.text(
+            0.5, 0.01,
+            "La probabilidad es histórica y condicional; no garantiza el siguiente movimiento. "
+            "Usa confirmación, invalidación y gestión de riesgo.",
+            ha="center", fontsize=9, color="dimgray",
+        )
+        fig.tight_layout(rect=(0.0, 0.04, 1.0, 0.94))
     return fig
 
 

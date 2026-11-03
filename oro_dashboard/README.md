@@ -71,8 +71,10 @@ Se abre en `http://localhost:8501`.
 - **Patrones Tecnicos**: picos/valles, patron armonico ABCD simplificado y
   hombro-cabeza-hombro (15m).
 - **Probabilidad de Targets**: backtest global (intradia o diario), overlay con
-  el calendario economico en la vista diaria, y probabilidad condicional por
-  regimen de tendencia (compra/venta).
+  el calendario economico en la vista diaria, probabilidad condicional por
+  regimen de tendencia (compra/venta) y lectura probabilistica contextual.
+  La estructura multi-temporalidad se muestra sin estrellas ni puntos de swings,
+  y ya no incluye graficos de posiciones proyectadas.
 - **Plan Killzone NY**: estadistica historica de la sesion 08:00-12:00
   America/New_York + ticket Entrada/SL/TP para la sesion vigente o la proxima,
   con los eventos economicos de ese dia.
@@ -84,6 +86,9 @@ Se abre en `http://localhost:8501`.
   (patron AMD) cerca de la ruptura y RR minimo 1:2 antes de listar un setup como
   operable — un spike aislado que revierte de inmediato (barrida de stops) queda
   "sin confirmar", nunca como señal limpia.
+- **Niveles diarios M5**: H07, H1130 y L16 calculados con velas M5 cerradas,
+  congelados para el siguiente dia, con sesgo direccional y señales opcionales
+  con retesteo. No ejecuta operaciones.
 
 ## Notas
 
