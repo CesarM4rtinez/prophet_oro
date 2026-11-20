@@ -89,6 +89,15 @@ Se abre en `http://localhost:8501`.
 - **Niveles diarios M5**: H07, H1130 y L16 calculados con velas M5 cerradas,
   congelados para el siguiente dia, con sesgo direccional y señales opcionales
   con retesteo. No ejecuta operaciones.
+- **Proyeccion por Regresion** (`core/regression_projection.py`): proyeccion de las
+  proximas velas en 5m (1 h), 15m (4 h) y 1h (24 h). Combina Ridge L2
+  multi-horizonte (momentum, termino polinomico, EMAs, RSI, volatilidad, hora del
+  dia), regresion logistica P(sube) y un Monte Carlo de 5 000 replays al estilo
+  del "Time Machine" de `Jakeschincariol/day-trader-skill` (velas reales del mismo
+  horario, stop antes que target, seed 19). Bandas 50 %/90 % por cuantiles de los
+  residuos fuera de muestra. Valida en el 20 % final: acierto direccional, prueba
+  binomial vs 50 %, P(sube | señal) (Bayes) y cobertura real de la banda 90 %.
+  Se reentrena solo cuando llega una vela nueva y se refresca con el auto-refresco.
 
 ## Notas
 

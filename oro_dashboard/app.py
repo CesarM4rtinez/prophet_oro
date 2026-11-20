@@ -52,6 +52,7 @@ def home_page() -> None:
         ("📊 Panel BI Multi-Timeframe", "Dos cascadas comparadas (15m/5m y 1h/15m): direccion via continuacion de estructura (BOS) + entrada via quiebre de estructura alineado — KPIs, señal Entry/SL/TP y graficos."),
         ("🧪 Backtest de Estrategia", "Simulacion de trades secuenciales: curva de capital, P/L por trade, entradas/salidas sobre el precio y comparacion contra Buy & Hold."),
         ("📐 Rango D1 y Killzones", "PDH/PDL del dia anterior, killzones Asia/Londres/NY con su zona de fin, rango historico 95 %/99 % y señales de Niveles diarios."),
+        ("📉 Proyeccion por Regresion", "Ridge L2 + logistica + Monte Carlo 'Time Machine' sobre 5m/15m/1h: mediana proyectada, bandas 50 %/90 %, P(sube) y validacion binomial fuera de muestra."),
     ]
     cols = st.columns(3)
     for i, (card_title, desc) in enumerate(cards):
@@ -74,6 +75,7 @@ pages = {
         st.Page("pages/backtest.py", title="Backtest de Estrategia", icon="🧪"),
         st.Page("pages/daily_levels.py", title="Niveles diarios M5", icon="📏"),
         st.Page("pages/rango_killzones.py", title="Rango D1 y Killzones", icon="📐"),
+        st.Page("pages/regression_projection.py", title="Proyeccion por Regresion", icon="📉"),
     ],
 }
 
