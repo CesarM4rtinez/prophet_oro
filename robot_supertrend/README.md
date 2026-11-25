@@ -16,7 +16,7 @@ Opera el CFD **GOLD** de Capital.com con el Supertrend de TradingView
 - Por que 1h: en el backtest del dashboard la regla gano en 1h (profit factor ~1,4 en
   2 años) y **perdio** en 15m y 5m.
 - Stop de emergencia en el broker: linea Supertrend ∓ 1 ATR, por si una ejecucion falla.
-- Valores iniciales: **cuenta DEMO** y **0,1 oz** por operacion.
+- Valores iniciales: **cuenta DEMO**, subcuenta **"dm"** y **0,1 oz** por operacion.
 
 ## Configuracion (una sola vez)
 
@@ -38,7 +38,7 @@ Opera el CFD **GOLD** de Capital.com con el Supertrend de TradingView
      | `BOT_ENABLED` | `true` | interruptor general (`false` = apagado) |
      | `CAPITAL_ENV` | `DEMO` | `LIVE` solo cuando decidas dinero real |
      | `BOT_SIZE` | `0.1` | onzas por operacion |
-     | `CAPITAL_ACCOUNT_NAME` | nombre exacto de la subcuenta (opcional) | si el robot debe operar en una subcuenta concreta |
+     | `CAPITAL_ACCOUNT_NAME` | (opcional) nombre exacto de otra subcuenta | por defecto el robot usa la subcuenta **dm** |
 
 3. **Prueba en simulacion:** pestaña **Actions** → *Robot Supertrend GOLD* → **Run workflow**
    con "Simulacion" marcado. Revisa el resumen: color, accion que tomaria y stop.
@@ -48,7 +48,8 @@ Opera el CFD **GOLD** de Capital.com con el Supertrend de TradingView
 ## Pasar a dinero real (cuando tu decidas)
 
 Variables `CAPITAL_ENV = LIVE` **y** `BOT_ALLOW_LIVE = true` (las dos; con solo una el robot
-se niega a operar). Recomendado: una subcuenta solo para el robot y `CAPITAL_ACCOUNT_NAME`.
+se niega a operar), y `CAPITAL_ACCOUNT_NAME` con el nombre de la subcuenta real: si no la
+cambias, el robot buscara "dm" en la cuenta real y, si no existe, se detiene sin operar.
 
 ## Importante
 
