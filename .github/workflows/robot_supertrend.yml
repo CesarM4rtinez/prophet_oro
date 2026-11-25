@@ -25,8 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -r robot_supertrend/requirements.txt
@@ -43,6 +43,8 @@ jobs:
           BOT_RESOLUTION: ${{ vars.BOT_RESOLUTION || 'HOUR' }}
           ST_PERIOD: ${{ vars.ST_PERIOD || '10' }}
           ST_FACTOR: ${{ vars.ST_FACTOR || '3' }}
+          BOT_MAX_SIGNAL_AGE: ${{ vars.BOT_MAX_SIGNAL_AGE || '0' }}   # 0 = entra ya segun el color vigente
+          BOT_EMERGENCY_STOP_ATR: ${{ vars.BOT_EMERGENCY_STOP_ATR || '1.0' }}
           CAPITAL_API_KEY: ${{ secrets.CAPITAL_API_KEY }}
           CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
           CAPITAL_PASSWORD: ${{ secrets.CAPITAL_PASSWORD }}
