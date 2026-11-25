@@ -3,9 +3,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from core import config
@@ -14,7 +14,9 @@ from core.state import render_refresh_control
 from core.window_forecast import (
     BAND_Q, LOCAL_TZ, PRIOR_NIGHTS, REPLAYS, SEED, WindowForecast, forecast_window, hourly_grid, verdict,
 )
-from ui.theme import COLORS, get_plotly_template, inject_css
+from core.supertrend import DEFAULT_FACTOR, DEFAULT_PERIOD, backtest_flip, current_state, supertrend
+from ui.mpl_window import equity_chart, supertrend_chart, touch_ladder_chart, window_fan_chart
+from ui.theme import COLORS, inject_css
 
 inject_css()
 
@@ -29,7 +31,13 @@ refresh_seconds = render_refresh_control()
 st.sidebar.markdown("#### Ventana (hora El Salvador)")
 start_h = int(st.sidebar.number_input("Inicio (hora 0-23)", min_value=0, max_value=23, value=21, key="wf_start"))
 end_h = int(st.sidebar.number_input("Fin (hora 0-23)", min_value=0, max_value=23, value=6, key="wf_end"))
+st.sidebar.markdown("#### Supertrend (TradingView)")
+st_period = int(st.sidebar.number_input("Longitud ATR", min_value=1, max_value=100, value=DEFAULT_PERIOD, key="st_period"))
+st_factor = float(st.sidebar.number_input("Factor", min_value=0.5, max_value=10.0, value=DEFAULT_FACTOR, step=0.5, key="st_factor"))
+st_tf = st.sidebar.selectbox("Temporalidad Supertrend", ["1h", "15m", "5m"], index=0, key="st_tf")
+st_cost = float(st.sidebar.number_input("Costo por operacion (USD/oz)", min_value=0.0, max_value=5.0, value=0.5, step=0.1, key="st_cost"))
 CANDLES_SHOWN = 36
+BAR_HOURS = {"1h": 1.0, "15m": 0.25, "5m": 5 / 60}
 
 
 @st.cache_data(ttl=900, show_spinner=False, max_entries=16)
@@ -47,88 +55,9 @@ def _hour12(ts: pd.Timestamp) -> str:
     return ts.strftime("%I:%M %p").lstrip("0").replace("AM", "a. m.").replace("PM", "p. m.")
 
 
-def _rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
-
-
 def _direction_has_edge(fc: WindowForecast) -> bool:
     v = fc.validation
     return bool(v) and v.get("skill", 0) > 0.01 and v.get("p_value", 1) < 0.05
-
-
-def fan_chart(df: pd.DataFrame, fc: WindowForecast) -> go.Figure:
-    g = hourly_grid(df).dropna().tail(CANDLES_SHOWN)
-    x_hist = _local(g.index)
-    x_fut = _local(fc.step_times_utc)
-    b = {q: fc.bands[i] for i, q in enumerate(BAND_Q)}
-    fc_color = COLORS["series_forecast"]
-
-    fig = go.Figure()
-    fig.add_vrect(
-        x0=fc.start_local.tz_localize(None), x1=fc.end_local.tz_localize(None),
-        fillcolor=_rgba(COLORS["series_zone"], 0.10), line_width=0, layer="below",
-        annotation_text="Ventana",
-        annotation_position="top left", annotation_font_color=COLORS["text_secondary"],
-    )
-    fig.add_trace(go.Candlestick(
-        x=x_hist, open=g["open"], high=g["high"], low=g["low"], close=g["close"],
-        increasing_line_color=COLORS["bull"], increasing_fillcolor=COLORS["bull"],
-        decreasing_line_color=COLORS["bear"], decreasing_fillcolor=COLORS["bear"],
-        line_width=1, name="Precio 1h",
-    ))
-    for lo_q, hi_q, alpha, name in ((0.10, 0.90, 0.16, "80 % probable"), (0.25, 0.75, 0.34, "50 % probable")):
-        fig.add_trace(go.Scatter(x=x_fut, y=b[lo_q], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-        fig.add_trace(go.Scatter(
-            x=x_fut, y=b[hi_q], mode="lines", line=dict(width=0), fill="tonexty",
-            fillcolor=_rgba(fc_color, alpha), name=name, hoverinfo="skip",
-        ))
-    fig.add_trace(go.Scatter(
-        x=x_fut, y=b[0.5], mode="lines", line=dict(color=fc_color, width=2), name="Mediana",
-        customdata=np.column_stack([b[0.10], b[0.25], b[0.75], b[0.90]]),
-        hovertemplate=(
-            "%{x|%d/%m %I:%M %p}<br>Mediana $%{y:,.2f}<br>50 %: $%{customdata[1]:,.0f}–$%{customdata[2]:,.0f}"
-            "<br>80 %: $%{customdata[0]:,.0f}–$%{customdata[3]:,.0f}<extra></extra>"
-        ),
-    ))
-    fig.add_hline(
-        y=fc.price_now, line_width=1, line_dash="dash", line_color=COLORS["text_muted"],
-        annotation_text=f"Ahora ${fc.price_now:,.2f}", annotation_position="bottom left",
-        annotation_font_color=COLORS["text_secondary"],
-    )
-    x_end = x_fut[-1]
-    for q, txt in ((0.90, "P90"), (0.5, "Mediana"), (0.10, "P10")):
-        fig.add_annotation(
-            x=x_end, y=b[q][-1], text=f"{txt} ${b[q][-1]:,.0f}", showarrow=False, xanchor="left", xshift=6,
-            font=dict(color=COLORS["text_primary"] if q == 0.5 else COLORS["text_secondary"], size=12),
-        )
-    fig.update_layout(
-        template=get_plotly_template(), height=560, xaxis_rangeslider_visible=False, hovermode="x unified",
-        title=f"{config.SYMBOL_LABEL} 1h → {_hour12(fc.end_local)}",
-        yaxis_title="Precio (USD)", margin=dict(l=10, r=110, t=70, b=90),
-        xaxis=dict(range=[x_hist[0] - pd.Timedelta(minutes=30), x_fut[-1] + pd.Timedelta(minutes=30)]),
-    )
-    return fig
-
-
-def ladder_chart(fc: WindowForecast) -> go.Figure:
-    levels = fc.touch_levels
-    labels = [f"${lv:,.0f}  ({lv - fc.price_now:+,.0f})" for lv, _ in levels]
-    probs = [p * 100 for _, p in levels]
-    colors = [COLORS["bull"] if lv > fc.price_now else COLORS["bear"] for lv, _ in levels]
-    fig = go.Figure(go.Bar(
-        x=probs, y=labels, orientation="h", marker_color=colors,
-        text=[f"{p:.0f} %" for p in probs], textposition="outside",
-        textfont=dict(color=COLORS["text_secondary"]),
-        hovertemplate="Nivel %{y}<br>P(lo toca antes del fin) = %{x:.1f} %<extra></extra>",
-    ))
-    fig.update_layout(
-        template=get_plotly_template(), height=420, showlegend=False,
-        title=f"P(tocar nivel) antes de {_hour12(fc.end_local)}",
-        xaxis=dict(range=[0, 105], ticksuffix=" %"), yaxis=dict(autorange="reversed"),
-        margin=dict(l=10, r=30, t=60, b=40),
-    )
-    return fig
 
 
 @st.fragment(run_every=refresh_seconds or None)
@@ -171,11 +100,24 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
-    st.plotly_chart(fan_chart(df, fc), width="stretch")
+    g = hourly_grid(df).dropna()
+    st_full = supertrend(g, st_period, st_factor)
+    hist, st_hist = g.tail(CANDLES_SHOWN), st_full.tail(CANDLES_SHOWN)
+    hist = hist.set_axis(_local(hist.index))
+    st_hist = st_hist.set_axis(hist.index)
+    fig = window_fan_chart(
+        hist, st_hist, fc, _local(fc.step_times_utc),
+        fc.start_local.tz_localize(None), fc.end_local.tz_localize(None),
+        title=f"{config.SYMBOL_LABEL} 1h → {_hour12(fc.end_local)} (hora El Salvador) · Supertrend {st_period}/{st_factor:g}",
+    )
+    st.pyplot(fig, width="stretch")
+    plt.close(fig)
 
     left, right = st.columns([1.1, 1])
     with left:
-        st.plotly_chart(ladder_chart(fc), width="stretch")
+        fig = touch_ladder_chart(fc.touch_levels, fc.price_now, f"P(tocar nivel) antes de {_hour12(fc.end_local)}")
+        st.pyplot(fig, width="stretch")
+        plt.close(fig)
     with right:
         st.markdown("###### Lectura rapida")
         c1, c2 = st.columns(2)
@@ -245,4 +187,74 @@ def render() -> None:
         )
 
 
+@st.fragment(run_every=refresh_seconds or None)
+def render_supertrend() -> None:
+    st.markdown("---")
+    st.markdown(f"##### 🟢🔴 Supertrend {st_period}/{st_factor:g} ({st_tf}) — compra en verde, venta en rojo, cierre al cambiar de color")
+    df = fetch_deep(st_tf)
+    if df.empty or len(df) < 100:
+        st.warning("No hay suficientes velas para el Supertrend ahora mismo.")
+        return
+    if st_tf == "1h":
+        df = hourly_grid(df).dropna()
+    s_tr = supertrend(df, st_period, st_factor)
+    state = current_state(df, s_tr, closed_only=True)  # "Espere al cierre de los intervalos de tiempo"
+    live_price = float(df["close"].iloc[-1])
+    is_buy = state["trend"] == 1
+    color = COLORS["bull"] if is_buy else COLORS["bear"]
+    since_local = _local([state["since"]])[0] if state["since"] is not None else None
+    move = (live_price - state["signal_close"]) * (1 if is_buy else -1) if state["signal_close"] else 0.0
+    new_badge = " · 🔔 NUEVA SEÑAL en la ultima vela cerrada" if state["new_signal_on_last_bar"] else ""
+    if since_local is None:
+        st.info("Aun no hay cambio de color en el historico cargado.")
+        return
+    st.markdown(
+        f'<div class="oro-card" style="border-left:5px solid {color};">'
+        f'<b style="font-size:1.6rem;color:{color};">{"🟢 COMPRA" if is_buy else "🔴 VENTA"}</b>{new_badge}<br>'
+        f'<span>Supertrend {"VERDE" if is_buy else "ROJO"} desde {since_local:%d/%m %I:%M %p} (hora El Salvador) '
+        f'· señal a ${state["signal_close"]:,.2f} · precio ahora ${live_price:,.2f} · '
+        f'resultado de la señal {move:+,.2f} USD/oz</span><br>'
+        f'<span style="opacity:0.8;">Stop dinamico (linea Supertrend): ${state["line"]:,.2f}. Se cierra y se da vuelta '
+        f'cuando una vela {st_tf} CIERRE {"debajo" if is_buy else "encima"} de esa linea.</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    shown = {"1h": 120, "15m": 160, "5m": 180}[st_tf]
+    d_show = df.tail(shown).set_axis(_local(df.tail(shown).index))
+    s_show = s_tr.tail(shown).set_axis(d_show.index)
+    fig = supertrend_chart(d_show, s_show, BAR_HOURS[st_tf], f"{config.SYMBOL_LABEL} {st_tf} · Supertrend {st_period}/{st_factor:g}")
+    st.pyplot(fig, width="stretch")
+    plt.close(fig)
+
+    bt = backtest_flip(df, s_tr, cost=st_cost)
+    if bt["n"] == 0:
+        return
+    span = f"{_local([df.index[0]])[0]:%d/%m/%Y} → {_local([df.index[-1]])[0]:%d/%m/%Y}"
+    st.markdown(f"###### Backtest de la regla ({span}, {bt['n']} operaciones, costo ${st_cost:.2f}/oz por operacion)")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Resultado neto (1 oz)", f"${bt['net']:,.0f}")
+    m2.metric("Profit factor", f"{bt['profit_factor']:.2f}")
+    m3.metric("Operaciones ganadoras", f"{bt['win_rate'] * 100:.0f} %")
+    m4.metric("Maxima caida", f"${bt['max_dd']:,.0f}")
+    fig = equity_chart(bt["equity"], _local(bt["trades"]["salida"]), "Curva de resultados acumulados (USD por 1 oz)")
+    st.pyplot(fig, width="stretch")
+    plt.close(fig)
+    verdict_txt = (
+        "✅ La regla fue rentable en este periodo (profit factor > 1,2)." if bt["profit_factor"] > 1.2 else
+        "⚠️ Rentabilidad marginal: el costo puede comerse la ventaja." if bt["profit_factor"] >= 1.0 else
+        "❌ La regla PERDIO dinero en esta temporalidad: no conviene automatizarla aqui."
+    )
+    st.caption(
+        f"{verdict_txt} Compras: ${bt['long_net']:,.0f} · Ventas: ${bt['short_net']:,.0f} · ganancia media ${bt['avg_win']:,.1f} "
+        f"vs perdida media ${bt['avg_loss']:,.1f}. Entradas a la apertura de la vela siguiente a la señal (vela cerrada). "
+        "Historico: 1h ≈ 2 años; 15m y 5m solo 60 dias (limite de Yahoo). Resultados pasados no garantizan los futuros."
+    )
+    last = bt["trades"].tail(8).iloc[::-1].copy()
+    last["entrada"] = _local(last["entrada"]).strftime("%d/%m %I:%M %p")
+    last["salida"] = _local(last["salida"]).strftime("%d/%m %I:%M %p")
+    last = last.rename(columns={"precio_entrada": "precio entrada", "precio_salida": "precio salida", "pnl": "resultado USD/oz"})
+    st.dataframe(last.round(2), hide_index=True, width="stretch")
+
+
 render()
+render_supertrend()
