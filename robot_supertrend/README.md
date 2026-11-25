@@ -7,7 +7,8 @@ Opera el CFD **GOLD** de Capital.com con el Supertrend de TradingView
 |---|---|
 | Pasa a **verde** | Cierra la venta (si hay) y **COMPRA** |
 | Pasa a **rojo** | Cierra la compra (si hay) y **VENDE** |
-| Sigue del mismo color | No hace nada (solo sube/baja el stop de emergencia a favor) |
+| Sigue del mismo color | Mantiene la posicion (solo mueve el stop de emergencia a favor) |
+| Sin posicion abierta | Entra **ya** segun el color vigente: rojo = VENTA, verde = COMPRA |
 
 - Corre en **GitHub Actions** cada hora, 3 minutos despues del cierre de la vela 1h
   (GitHub puede retrasarlo unos minutos).
@@ -55,8 +56,11 @@ cambias, el robot buscara "dm" en la cuenta real y, si no existe, se detiene sin
 
 - El robot gestiona **todas** las posiciones de GOLD en la cuenta elegida. No operes GOLD a
   mano en esa misma cuenta.
-- Si al encenderlo la ultima señal tiene mas de 3 velas, espera al proximo cambio de color en
-  vez de entrar a mitad de una tendencia (`BOT_MAX_SIGNAL_AGE`).
+- Sin posicion, entra de inmediato segun el color vigente, aunque el cambio de color haya sido
+  hace muchas velas. Para entrar solo en las primeras N velas tras un cambio de color, crea la
+  variable `BOT_MAX_SIGNAL_AGE = N` (por ejemplo 3). `0` = sin limite (valor por defecto).
+- `BOT_EMERGENCY_STOP_ATR` (por defecto 1.0): distancia del stop de emergencia, en ATR, mas
+  alla de la linea Supertrend. `0` lo desactiva.
 - GitHub desactiva los workflows programados tras 60 dias sin actividad en el repositorio;
   si eso pasa, lo reactivas desde la pestaña Actions.
 - El backtest no garantiza resultados futuros. Con 1 oz la caida maxima historica fue ~$988;

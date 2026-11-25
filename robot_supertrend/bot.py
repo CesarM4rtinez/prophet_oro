@@ -13,8 +13,9 @@ Cada ejecucion (GitHub Actions, unos minutos despues del cierre de cada vela 1h)
    `oro_dashboard/core/supertrend.py` (el mismo codigo del dashboard).
 3. Compara la direccion vigente con la posicion abierta en el instrumento:
    - posicion contraria -> la cierra y abre la nueva direccion;
-   - sin posicion -> abre SOLO si el cambio de color ocurrio en las ultimas
-     `BOT_MAX_SIGNAL_AGE` velas (no entra a mitad de una tendencia vieja);
+   - sin posicion -> entra YA segun el color vigente (rojo = VENTA, verde = COMPRA).
+     Con `BOT_MAX_SIGNAL_AGE` = N > 0 solo entra si el cambio de color fue en las
+     ultimas N velas (por defecto 0 = sin limite);
    - misma direccion -> no hace nada (solo mueve el stop de emergencia).
    El estado sale del broker, no de un archivo: repetir una ejecucion es seguro.
 4. Stop de emergencia en el broker = linea Supertrend -/+ `BOT_EMERGENCY_STOP_ATR`
@@ -91,7 +92,7 @@ class Settings:
             resolution=_env("BOT_RESOLUTION", "HOUR") or "HOUR",
             period=int(_env("ST_PERIOD", "10") or 10),
             factor=float(_env("ST_FACTOR", "3") or 3),
-            max_signal_age=int(_env("BOT_MAX_SIGNAL_AGE", "3") or 3),
+            max_signal_age=int(_env("BOT_MAX_SIGNAL_AGE", "0") or 0),
             emergency_stop_atr=float(_env("BOT_EMERGENCY_STOP_ATR", "1.0") or 1.0),
             dry_run=_flag("BOT_DRY_RUN", False),
             enabled=_flag("BOT_ENABLED", False),
@@ -227,7 +228,8 @@ def decide(df: pd.DataFrame, positions: list[dict], s: Settings) -> dict:
 
     to_close = [p for p in positions if p["direction"] != want]
     same = [p for p in positions if p["direction"] == want]
-    fresh = age is not None and age < s.max_signal_age
+    # 0 = sin limite: sin posicion, entra ya segun el color vigente (eleccion del usuario).
+    fresh = s.max_signal_age <= 0 or (age is not None and age < s.max_signal_age)
     if to_close:
         action = "DAR_VUELTA"
     elif same:

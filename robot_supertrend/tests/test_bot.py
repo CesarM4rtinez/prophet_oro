@@ -26,7 +26,7 @@ def _prices_body(closes, start="2026-11-20 00:00"):
 
 def _settings(**kw):
     base = dict(environment="DEMO", api_key="k", identifier="i", password="p", account_name=None, epic="GOLD",
-                size=0.1, resolution="HOUR", period=10, factor=3.0, max_signal_age=3, emergency_stop_atr=1.0,
+                size=0.1, resolution="HOUR", period=10, factor=3.0, max_signal_age=0, emergency_stop_atr=1.0,
                 dry_run=False, enabled=True, allow_live=False)
     base.update(kw)
     return bot.Settings(**base)
@@ -108,12 +108,47 @@ def test_dry_run_sends_no_orders(monkeypatch):
     assert not [1 for m, p, _ in fake.calls if m in ("POST", "DELETE") and p.startswith("/api/v1/positions")]
 
 
-def test_stale_signal_waits(monkeypatch):
-    closes = UP_THEN_DOWN + list(np.linspace(3150, 3050, 30))  # rojo hace muchas velas
+OLD_RED = UP_THEN_DOWN + list(np.linspace(3150, 3050, 30))  # rojo desde hace muchas velas
+LATER = NOW + pd.Timedelta(hours=40)
+
+
+def _opened(fake):
+    return [j for m, p, j in fake.calls if m == "POST" and p == "/api/v1/positions"]
+
+
+def test_red_without_position_sells_now_by_default(monkeypatch):
+    fake = FakeCapital(OLD_RED, [])
+    monkeypatch.setattr(bot.requests, "request", fake)
+    d = bot.run(_settings(), now=LATER)
+    assert d["color"] == "ROJO" and d["action"] == "ABRIR"
+    assert _opened(fake)[0]["direction"] == "SELL"
+    assert _opened(fake)[0]["stopLevel"] > d["close"]
+
+
+def test_green_without_position_buys_now_by_default(monkeypatch):
+    closes = list(np.linspace(3300, 3000, 120)) + list(np.linspace(3000, 3150, 40))
     fake = FakeCapital(closes, [])
     monkeypatch.setattr(bot.requests, "request", fake)
-    d = bot.run(_settings(), now=NOW + pd.Timedelta(hours=40))
-    assert d["action"] == "ESPERAR"
+    d = bot.run(_settings(), now=LATER)
+    assert d["color"] == "VERDE" and _opened(fake)[0]["direction"] == "BUY"
+    assert _opened(fake)[0]["stopLevel"] < d["close"]
+
+
+def test_green_flip_closes_short_and_buys(monkeypatch):
+    closes = list(np.linspace(3300, 3000, 120)) + list(np.linspace(3000, 3150, 8))
+    fake = FakeCapital(closes, [{"dealId": "S1", "direction": "SELL", "size": 0.1, "level": 3100}])
+    monkeypatch.setattr(bot.requests, "request", fake)
+    d = bot.run(_settings(), now=NOW)
+    assert d["color"] == "VERDE" and d["action"] == "DAR_VUELTA"
+    assert ("DELETE", "/api/v1/positions/S1") in [(m, p) for m, p, _ in fake.calls]
+    assert _opened(fake)[0]["direction"] == "BUY"
+
+
+def test_stale_signal_waits_when_age_limit_set(monkeypatch):
+    fake = FakeCapital(OLD_RED, [])
+    monkeypatch.setattr(bot.requests, "request", fake)
+    d = bot.run(_settings(max_signal_age=3), now=LATER)
+    assert d["action"] == "ESPERAR" and not _opened(fake)
 
 
 def test_disabled_and_live_guards(monkeypatch):
