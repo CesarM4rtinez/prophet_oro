@@ -82,9 +82,9 @@ class Settings:
     def from_env(cls) -> "Settings":
         return cls(
             environment=(_env("CAPITAL_ENV", "DEMO") or "DEMO").upper(),
-            api_key=_env("CAPITAL_API_KEY", "WO4HqKv8WQlBqn37") or "",
-            identifier=_env("CAPITAL_IDENTIFIER", "comartinezsv@gmail.com") or "",
-            password=_env("CAPITAL_PASSWORD", "P1zz41994_") or "",
+            api_key=_env("CAPITAL_API_KEY", "") or "",
+            identifier=_env("CAPITAL_IDENTIFIER", "") or "",
+            password=_env("CAPITAL_PASSWORD", "") or "",
             account_name=_env("CAPITAL_ACCOUNT_NAME"),
             epic=_env("BOT_EPIC", "GOLD") or "GOLD",
             size=float(_env("BOT_SIZE", "0.1") or 0.1),
@@ -94,7 +94,7 @@ class Settings:
             max_signal_age=int(_env("BOT_MAX_SIGNAL_AGE", "3") or 3),
             emergency_stop_atr=float(_env("BOT_EMERGENCY_STOP_ATR", "1.0") or 1.0),
             dry_run=_flag("BOT_DRY_RUN", False),
-            enabled=_flag("BOT_ENABLED", True),
+            enabled=_flag("BOT_ENABLED", False),
             allow_live=_flag("BOT_ALLOW_LIVE", False),
         )
 
