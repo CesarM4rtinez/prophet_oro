@@ -1,0 +1,48 @@
+# Robot Supertrend 10/3 (1h) para GOLD en Capital.com — ver robot_supertrend/README.md
+name: Robot Supertrend GOLD (Capital.com)
+
+on:
+  schedule:
+    - cron: "3 * * * *"   # 3 min despues de cada hora (cierre de la vela 1h); GitHub puede retrasarlo unos minutos
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulacion: calcula la señal sin enviar ordenes"
+        type: boolean
+        default: true
+
+concurrency:
+  group: robot-supertrend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    # Interruptor general: Settings → Secrets and variables → Actions → Variables → BOT_ENABLED = true
+    if: vars.BOT_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r robot_supertrend/requirements.txt
+      - name: Ejecutar robot
+        run: python robot_supertrend/bot.py
+        env:
+          BOT_ENABLED: ${{ vars.BOT_ENABLED }}
+          BOT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) || (vars.BOT_DRY_RUN || 'false') }}
+          CAPITAL_ENV: ${{ vars.CAPITAL_ENV || 'DEMO' }}
+          BOT_ALLOW_LIVE: ${{ vars.BOT_ALLOW_LIVE || 'false' }}
+          CAPITAL_ACCOUNT_NAME: ${{ vars.CAPITAL_ACCOUNT_NAME }}
+          BOT_EPIC: ${{ vars.BOT_EPIC || 'GOLD' }}
+          BOT_SIZE: ${{ vars.BOT_SIZE || '0.1' }}
+          BOT_RESOLUTION: ${{ vars.BOT_RESOLUTION || 'HOUR' }}
+          ST_PERIOD: ${{ vars.ST_PERIOD || '10' }}
+          ST_FACTOR: ${{ vars.ST_FACTOR || '3' }}
+          CAPITAL_API_KEY: ${{ secrets.CAPITAL_API_KEY }}
+          CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
+          CAPITAL_PASSWORD: ${{ secrets.CAPITAL_PASSWORD }}
