@@ -98,6 +98,14 @@ Se abre en `http://localhost:8501`.
   residuos fuera de muestra. Valida en el 20 % final: acierto direccional, prueba
   binomial vs 50 %, P(sube | señal) (Bayes) y cobertura real de la banda 90 %.
   Se reentrena solo cuando llega una vela nueva y se refresca con el auto-refresco.
+- **Pronostico por Ventana (1h)** (`core/window_forecast.py`): responde "¿que hara el
+  oro entre ahora y el fin de la ventana?" (por defecto 9 p. m. -> 6 a. m. hora de El
+  Salvador, configurable). Monte Carlo de noches historicas completas (~2 años de
+  velas 1h), escaladas por volatilidad, ponderadas por parecido de regimen (3
+  variables, kernel fijo) y encogidas hacia la tasa base; separa noches de mercado
+  abierto y de fin de semana. Muestra cono 50 %/80 %, probabilidad de tocar cada
+  nivel y una validacion walk-forward (cobertura de bandas, calibracion de toques,
+  skill direccional vs tasa base, prueba binomial).
 
 ## Notas
 

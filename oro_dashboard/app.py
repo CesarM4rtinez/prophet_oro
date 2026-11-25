@@ -44,6 +44,7 @@ def home_page() -> None:
 
     st.markdown("### Secciones del dashboard")
     cards = [
+        ("🌙 Pronostico por Ventana (1h)", "¿Que hara el oro de 9 p. m. a 6 a. m. (o la ventana que elijas)? Cono probabilistico, probabilidad de tocar cada nivel y validacion walk-forward de ~2 años de noches."),
         ("📈 Pronostico Prophet", "Historico + prediccion a 30 dias con banda de incertidumbre del 95%, exportable a Excel."),
         ("🔍 Patrones Tecnicos", "Picos, valles, patron armonico ABCD y hombro-cabeza-hombro (15m)."),
         ("🎯 Probabilidad de Targets", "Backtest de probabilidad global, por regimen de tendencia y cruzado con el calendario economico."),
@@ -66,6 +67,7 @@ def home_page() -> None:
 pages = {
     "Dashboard": [st.Page(home_page, title="Resumen", icon="🏠", default=True)],
     "Analitica": [
+        st.Page("pages/window_forecast.py", title="Pronostico por Ventana (1h)", icon="🌙"),
         st.Page("pages/forecast.py", title="Pronostico Prophet", icon="📈"),
         st.Page("pages/patterns.py", title="Patrones Tecnicos", icon="🔍"),
         st.Page("pages/probability.py", title="Probabilidad de Targets", icon="🎯"),
