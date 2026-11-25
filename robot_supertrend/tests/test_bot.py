@@ -66,7 +66,12 @@ class FakeCapital:
         if path.startswith("/api/v1/positions") and method in ("POST", "DELETE"):
             return FakeResp({"dealReference": "ref1"})
         if path.startswith("/api/v1/confirms/"):
-            return FakeResp({"dealStatus": "ACCEPTED", "level": 3150.0})
+            return FakeResp({"dealStatus": "ACCEPTED", "level": 3150.0, "affectedDeals": [{"dealId": "NEW1"}]})
+        if path == "/api/v1/accounts":
+            return FakeResp({"accounts": [{"accountId": "A1", "accountName": "Principal"},
+                                          {"accountId": "A2", "accountName": "dm"}]})
+        if path == "/api/v1/session" and method == "PUT":
+            return FakeResp({}, {"CST": "c2", "X-SECURITY-TOKEN": "t2"})
         return FakeResp({})
 
 
@@ -161,3 +166,22 @@ def test_matches_dashboard_supertrend():
     """El robot y el dashboard usan exactamente la misma funcion."""
     from core import supertrend as dash
     assert bot.supertrend is dash.supertrend
+
+
+def test_switches_to_dm_subaccount_and_reports_it(monkeypatch):
+    fake = FakeCapital(OLD_RED, [])
+    monkeypatch.setattr(bot.requests, "request", fake)
+    d = bot.run(_settings(account_name="DM"), now=LATER)  # mayusculas/minusculas no importan
+    assert ("PUT", "/api/v1/session", {"accountId": "A2"}) in fake.calls
+    assert d["cuenta"].startswith("dm") and d["ejecutado"][0]["dealId"] == "NEW1"
+    assert "Cuenta: **dm" in bot._summary(d)
+
+
+def test_repeated_runs_in_same_hour_do_not_duplicate(monkeypatch):
+    """Con el cron cada 5 min: si ya hay una VENTA abierta y sigue rojo, no abre otra."""
+    fake = FakeCapital(OLD_RED, [{"dealId": "S1", "direction": "SELL", "size": 0.1, "level": 3505, "stopLevel": 3566}])
+    monkeypatch.setattr(bot.requests, "request", fake)
+    for _ in range(3):
+        d = bot.run(_settings(), now=LATER)
+        assert d["action"] == "MANTENER"
+    assert not _opened(fake)

@@ -10,8 +10,10 @@ Opera el CFD **GOLD** de Capital.com con el Supertrend de TradingView
 | Sigue del mismo color | Mantiene la posicion (solo mueve el stop de emergencia a favor) |
 | Sin posicion abierta | Entra **ya** segun el color vigente: rojo = VENTA, verde = COMPRA |
 
-- Corre en **GitHub Actions** cada hora, 3 minutos despues del cierre de la vela 1h
-  (GitHub puede retrasarlo unos minutos).
+- Corre en **GitHub Actions** cada 5 minutos (GitHub retrasa o descarta ejecuciones
+  programadas; revisar seguido asegura actuar poco despues del cierre de cada vela 1h).
+  Las señales se calculan SOLO con velas 1h cerradas: revisar mas seguido no cambia la
+  estrategia, y si no hay cambio de color no hace nada.
 - Usa las velas 1h **del propio Capital.com** (precio bid, el de su grafico) y el mismo
   codigo de Supertrend que el dashboard (`oro_dashboard/core/supertrend.py`).
 - Por que 1h: en el backtest del dashboard la regla gano en 1h (profit factor ~1,4 en

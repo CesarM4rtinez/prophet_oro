@@ -3,7 +3,11 @@ name: Robot Supertrend GOLD (Capital.com)
 
 on:
   schedule:
-    - cron: "3 * * * *"   # 3 min despues de cada hora (cierre de la vela 1h); GitHub puede retrasarlo unos minutos
+    # Cada 5 minutos (el minimo de GitHub). GitHub NO garantiza los horarios: el 25/11 un cron
+    # horario corrio 1 sola vez en ~10 h. El robot es seguro de repetir (solo usa velas 1h
+    # cerradas y lee el estado de Capital.com), asi que revisar seguido solo reduce la demora
+    # entre el cierre de la vela y la orden; si no hay cambio de color no hace nada.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
