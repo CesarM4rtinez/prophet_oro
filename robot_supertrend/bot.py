@@ -108,6 +108,7 @@ class CapitalAPI:
         self.s = s
         self.base = BASE_URLS[s.environment]
         self.cst = self.token = None
+        self.account_label = "(cuenta por defecto)"
 
     def _h(self) -> dict:
         h = {"X-CAP-API-KEY": self.s.api_key, "Content-Type": "application/json"}
@@ -132,6 +133,7 @@ class CapitalAPI:
         if not (self.cst and self.token):
             raise RuntimeError("Capital.com no devolvio tokens de sesion.")
         current = r.json().get("currentAccountId")
+        self.account_label = f"(cuenta por defecto, id {current})"
         if self.s.account_name:
             accounts = self._req("GET", "/api/v1/accounts").json().get("accounts", [])
             target = self.s.account_name.strip().lower()
@@ -143,6 +145,7 @@ class CapitalAPI:
                 r = self._req("PUT", "/api/v1/session", json={"accountId": match[0]["accountId"]})
                 self.cst = r.headers.get("CST") or self.cst
                 self.token = r.headers.get("X-SECURITY-TOKEN") or self.token
+            self.account_label = f"{match[0].get('accountName')} (id {match[0]['accountId']})"
 
     def logout(self) -> None:
         try:
@@ -266,7 +269,8 @@ def run(s: Settings, now: datetime | None = None) -> dict:
         positions = api.positions(s.epic)
         d = decide(df, positions, s)
         d.update({"env": s.environment, "epic": s.epic, "size": s.size, "dry_run": s.dry_run,
-                  "posiciones_antes": positions, "ejecutado": []})
+                  "cuenta": api.account_label, "posiciones_antes": positions, "ejecutado": [],
+                  "posiciones_despues": positions})
         if s.dry_run:
             return d
         if d["action"] == "DAR_VUELTA":
@@ -274,8 +278,9 @@ def run(s: Settings, now: datetime | None = None) -> dict:
                 d["ejecutado"].append({"cerrar": deal_id, "resp": api.close(deal_id).get("dealStatus")})
         if d["action"] == "ABRIR" or (d["action"] == "DAR_VUELTA" and not d["keep"]):
             resp = api.open(s.epic, d["want"], s.size, d["emergency_stop"])
+            deal = (resp.get("affectedDeals") or [{}])[0].get("dealId") or resp.get("dealId")
             d["ejecutado"].append({"abrir": d["want"], "size": s.size, "resp": resp.get("dealStatus"),
-                                   "nivel": resp.get("level")})
+                                   "nivel": resp.get("level"), "dealId": deal})
         elif d["action"] == "MANTENER" and d["emergency_stop"] is not None:
             for p in positions:
                 if p["dealId"] in d["keep"]:
@@ -285,6 +290,8 @@ def run(s: Settings, now: datetime | None = None) -> dict:
                     if better:  # el stop solo se mueve a favor, nunca se aleja
                         api.set_stop(p["dealId"], d["emergency_stop"])
                         d["ejecutado"].append({"stop": p["dealId"], "nivel": round(d["emergency_stop"], 2)})
+        if d["ejecutado"]:
+            d["posiciones_despues"] = api.positions(s.epic)
         return d
     finally:
         api.logout()
@@ -300,8 +307,14 @@ def _summary(d: dict) -> str:
         f"· cambio de color hace {d['signal_age_bars']} velas",
         f"- Accion: **{d['action']}** → direccion {d['want']} · tamaño {d['size']}",
         f"- Stop de emergencia: {d['emergency_stop']:.2f}" if d["emergency_stop"] is not None else "- Sin stop de emergencia",
+        f"- Cuenta: **{d.get('cuenta', '?')}**",
         f"- Posiciones antes: {len(d['posiciones_antes'])} · Ejecutado: {json.dumps(d['ejecutado'], ensure_ascii=False)}",
     ]
+    for p in d.get("posiciones_despues") or []:
+        lines.append(
+            f"- Posicion abierta {d['epic']}: {p['direction']} {p['size']} @ {p['level']:.2f} · stop {p.get('stopLevel')} "
+            f"· P/L {p.get('upl')} · dealId `{p['dealId']}`"
+        )
     return "\n".join(lines) + "\n"
 
 
