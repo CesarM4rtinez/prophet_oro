@@ -1,0 +1,21 @@
+Datos: 27,129 velas 1m GC=F 29/10 -> 26/11/2026 · entrenamiento hasta 12/11 07:27 UTC
+36 configuraciones · ganan en entrenamiento: 20 · ganan en prueba: 25 · ganan en ambas: 14
+
+Top 5 elegidas SOLO con entrenamiento -> como les fue en la PRUEBA:
+entrada | stop | objetivo | stop a cero | ent: ops/acierto/$oz | PRUEBA: ops/acierto/$oz/PF | prueba con costo $0,60
+confirmacion | estructura (tope $2,50) | ext 1,618 | +1.0R | 34/47%/+0.99 | 53/49%/-0.03/0.98 | -0.41
+confirmacion | fijo $2,50 | ext 1,618 | +1.0R | 34/47%/+0.97 | 53/49%/-0.04/0.97 | -0.42
+limite 0,618 | estructura (tope $2,50) | ext 1,618 | no | 55/16%/+0.75 | 77/16%/+0.48/1.23 | +0.18
+confirmacion | estructura (tope $2,50) | ext 1,618 | no | 33/18%/+0.84 | 51/22%/+1.45/1.66 | +1.15
+confirmacion | fijo $2,50 | ext 1,618 | no | 33/18%/+0.81 | 51/24%/+1.62/1.76 | +1.32
+
+Mejor por entrenamiento: ('confirmacion', 'estructura (tope $2,50)', 'ext 1,618', 1.0)
+  riesgo 2% por op (1:200): $10 en 28 dias -> $11.43 (caida max 21%) · solo en la prueba -> $9.59 (caida 21%)
+  riesgo 5% por op (1:200): $10 en 28 dias -> $12.37 (caida max 47%) · solo en la prueba -> $8.28 (caida 47%)
+  riesgo 10% por op (1:200): $10 en 28 dias -> $9.14 (caida max 76%) · solo en la prueba -> $5.29 (caida 76%)
+  riesgo 30% por op (1:200): $10 en 28 dias -> $4.82 (caida max 90%) · solo en la prueba -> $2.74 (caida 90%)
+  dias 19-20/11 (cuando operaste): 13 ops, acierto 69%, +13.46 $/oz; $10 al 10% -> $14.08
+  Monte Carlo 1 mes (73 ops, riesgo 2%): mediana $9.31 · P(llegar a $135) 0% · P(terminar < $5) 0%
+  Monte Carlo 1 mes (73 ops, riesgo 5%): mediana $7.60 · P(llegar a $135) 0% · P(terminar < $5) 25%
+  Monte Carlo 1 mes (73 ops, riesgo 10%): mediana $3.95 · P(llegar a $135) 1% · P(terminar < $5) 58%
+  Monte Carlo 1 mes (73 ops, riesgo 30%): mediana $0.02 · P(llegar a $135) 5% · P(terminar < $5) 96%
