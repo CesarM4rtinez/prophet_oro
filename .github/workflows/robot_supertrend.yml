@@ -3,6 +3,9 @@ name: Robot Supertrend GOLD (Capital.com)
 
 on:
   schedule:
+    # RESPALDO: lo recomendado es robot_supertrend/runner.py en una PC o servidor (ver README).
+    # Si usas el runner, pon BOT_ENABLED=false en las variables de GitHub para no operar dos veces.
+    # Los frenos de perdida diaria / caida maxima necesitan el estado del runner: aqui no aplican.
     # Cada 5 minutos (el minimo de GitHub). GitHub NO garantiza los horarios: el 25/11 un cron
     # horario corrio 1 sola vez en ~10 h. El robot es seguro de repetir (solo usa velas 1h
     # cerradas y lee el estado de Capital.com), asi que revisar seguido solo reduce la demora
@@ -47,8 +50,15 @@ jobs:
           BOT_RESOLUTION: ${{ vars.BOT_RESOLUTION || 'HOUR' }}
           ST_PERIOD: ${{ vars.ST_PERIOD || '10' }}
           ST_FACTOR: ${{ vars.ST_FACTOR || '3' }}
-          BOT_MAX_SIGNAL_AGE: ${{ vars.BOT_MAX_SIGNAL_AGE || '0' }}   # 0 = entra ya segun el color vigente
+          BOT_MAX_SIGNAL_AGE: ${{ vars.BOT_MAX_SIGNAL_AGE || '2' }}   # solo entra en las 2 velas siguientes al cambio de color
           BOT_EMERGENCY_STOP_ATR: ${{ vars.BOT_EMERGENCY_STOP_ATR || '1.0' }}
+          BOT_SIZING: ${{ vars.BOT_SIZING || 'risk' }}
+          RISK_TOTAL_PCT: ${{ vars.RISK_TOTAL_PCT || '1.5' }}
+          RISK_ADD_EVERY_ATR: ${{ vars.RISK_ADD_EVERY_ATR || '1.0' }}
+          RISK_MAX_UNITS: ${{ vars.RISK_MAX_UNITS || '' }}
+          NEWS_FILTER: ${{ vars.NEWS_FILTER || 'true' }}
+          NEWS_MINUTES_BEFORE: ${{ vars.NEWS_MINUTES_BEFORE || '30' }}
+          NEWS_MINUTES_AFTER: ${{ vars.NEWS_MINUTES_AFTER || '45' }}
           CAPITAL_API_KEY: ${{ secrets.CAPITAL_API_KEY }}
           CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
           CAPITAL_PASSWORD: ${{ secrets.CAPITAL_PASSWORD }}

@@ -26,3 +26,8 @@ Thumbs.db
 # Cache de datos 1m del laboratorio de backtesting (se regenera)
 research/backtest_1m/.cache/
 
+research/scaling_1h/.cache/
+
+# Robot: credenciales y estado locales del runner (nunca a GitHub)
+robot_supertrend/.env
+robot_supertrend/robot_state.json
