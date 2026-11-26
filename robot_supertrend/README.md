@@ -45,25 +45,51 @@ gana ~40 % de las operaciones: las ganadoras son mas grandes que las perdedoras.
 filtro de noticias no esta en el backtest (no hay calendario historico gratuito).
 Resultados pasados no garantizan los futuros.
 
-## Como ejecutarlo de forma continua (recomendado)
+## Como se ejecuta: GitHub Actions (forma principal)
 
-GitHub Actions **no cumple sus horarios** (el 25/11 ejecuto el robot 2 veces en 8 horas con
-un cron de 5 minutos) y sus terminos no permiten usarlo como servidor permanente. Por eso v2
-incluye `runner.py`, que revisa cada minuto con la sesion abierta.
+El flujo `.github/workflows/robot_supertrend.yml` corre el robot y guarda la memoria de los
+frenos (capital al inicio del dia, maximo, pausa) en la cache de GitHub entre ejecuciones.
 
-1. Copia `robot_supertrend/.env.example` como `robot_supertrend/.env` y completa la clave,
-   el email y la contraseña (`.env` esta en `.gitignore`: nunca se sube).
-2. `pip install -r robot_supertrend/requirements.txt`
-3. `python robot_supertrend/runner.py` (Ctrl+C para detener). Imprime un resumen cada vez que
-   algo cambia y guarda el estado de los frenos en `robot_supertrend/robot_state.json`.
-4. Pon **`BOT_ENABLED = false` en las variables de GitHub** para que Actions no opere en paralelo.
+**Problema:** el horario interno de GitHub no es confiable (el 25/11 ejecuto el robot 2
+veces en 8 horas con un cron de 5 minutos). **Solucion:** un servicio externo gratuito
+(cron-job.org) le pide a GitHub ejecutar el flujo cada 5 minutos; GitHub atiende esos
+pedidos al momento. El cron interno queda de respaldo.
 
-Donde dejarlo corriendo (de lunes a viernes, 24 h): tu PC con la suspension desactivada
-(Windows: Programador de tareas → "Al iniciar sesion" → `python ruta\robot_supertrend\runner.py`),
-o un servidor pequeño (VPS Linux con `systemd`, Railway, Render "background worker",
-PythonAnywhere "always-on task"). En cualquiera, las claves van como variables de entorno o en `.env`.
+### 1. Crear un token de GitHub solo para disparar el robot
+1. GitHub → foto de perfil → **Settings** → **Developer settings** → **Personal access tokens**
+   → **Fine-grained tokens** → **Generate new token**.
+2. Nombre: `robot-oro-cron`. Expiracion: la que prefieras (al vencer, el robot deja de dispararse
+   hasta que lo renueves).
+3. **Repository access:** *Only select repositories* → `prophet_oro`.
+4. **Permissions → Repository permissions → Actions: Read and write.** Nada mas.
+5. Genera y copia el token (empieza con `github_pat_`). Solo sirve para lanzar y ver
+   ejecuciones de Actions de este repositorio: no puede leer ni cambiar el codigo.
 
-GitHub Actions queda como **respaldo** con las mismas reglas, salvo los frenos (no guarda estado).
+### 2. Programar la llamada en cron-job.org
+1. Crea una cuenta gratuita en cron-job.org → **Create cronjob**.
+2. **URL:** `https://api.github.com/repos/CesarM4rtinez/prophet_oro/actions/workflows/robot_supertrend.yml/dispatches`
+3. **Schedule:** cada 5 minutos.
+4. **Advanced → Request method:** `POST`.
+5. **Headers:**
+   - `Accept: application/vnd.github+json`
+   - `Authorization: Bearer <tu token github_pat_...>`
+   - `X-GitHub-Api-Version: 2022-11-28`
+6. **Request body:** `{"ref":"main","inputs":{"dry_run":"false"}}`
+7. Guarda y usa **Test run**: debe responder `204`, y en la pestaña Actions de GitHub aparece una
+   ejecucion "workflow_dispatch". Con `dry_run` en `"true"` puedes probar sin enviar ordenes.
+
+### 3. Variables de GitHub
+`BOT_ENABLED = true` y `CAPITAL_ENV = DEMO` (Settings → Secrets and variables → Actions →
+Variables), mas los 3 Secrets de Capital.com. Si `CAPITAL_ACCOUNT_NAME` no existe, el robot
+usa la subcuenta `dm`.
+
+**Reanudar tras el freno de caida maxima:** Actions → **Caches** → borra las entradas
+`robot-state-...`.
+
+### Alternativa: ejecucion continua en una PC o servidor (`runner.py`)
+Si algun dia prefieres no depender de GitHub: copia `.env.example` como `.env`, completa las
+claves y ejecuta `python robot_supertrend/runner.py` (revisa cada minuto con la sesion
+abierta). En ese caso pon `BOT_ENABLED = false` en GitHub para no operar dos veces.
 
 ## Variables (todas opcionales salvo las claves)
 
@@ -82,7 +108,8 @@ GitHub Actions queda como **respaldo** con las mismas reglas, salvo los frenos (
 | `BOT_SIZING` / `BOT_SIZE` | `risk` / `0.1` | `fixed` vuelve al tamaño fijo |
 | `NEWS_FILTER`, `NEWS_MINUTES_BEFORE`, `NEWS_MINUTES_AFTER` | `true`, `30`, `45` | filtro de noticias |
 
-Para reanudar tras el freno de caida maxima: borra la clave `"halted"` de `robot_state.json`.
+Para reanudar tras el freno de caida maxima: en Actions borra las caches `robot-state-...`
+(con `runner.py`, borra la clave `"halted"` de `robot_state.json`).
 
 ## Noticias (`news.py`)
 
