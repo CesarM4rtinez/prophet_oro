@@ -33,3 +33,4 @@ robot_supertrend/.env
 robot_supertrend/robot_state.json
 
 research/fibonacci/.cache/
+research/manual_style/.cache/
