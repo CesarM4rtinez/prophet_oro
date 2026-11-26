@@ -1,15 +1,16 @@
 # Robot Supertrend 10/3 (1h) para GOLD en Capital.com — ver robot_supertrend/README.md
 name: Robot Supertrend GOLD (Capital.com)
 
+# Disparadores:
+# 1. PRINCIPAL: cron-job.org llama cada 5 min a la API de GitHub (workflow_dispatch con
+#    dry_run=false). GitHub atiende esas llamadas al momento; su horario interno no (el 25/11
+#    corrio 2 veces en 8 h). Pasos en robot_supertrend/README.md, seccion "GitHub Actions".
+# 2. RESPALDO: el cron de GitHub de abajo, por si el servicio externo falla.
+# El robot es seguro de repetir (velas 1h cerradas + estado leido de Capital.com) y no
+# corre dos copias a la vez (concurrency). Si usas runner.py en una PC, apaga este flujo
+# con BOT_ENABLED=false para no operar dos veces.
 on:
   schedule:
-    # RESPALDO: lo recomendado es robot_supertrend/runner.py en una PC o servidor (ver README).
-    # Si usas el runner, pon BOT_ENABLED=false en las variables de GitHub para no operar dos veces.
-    # Los frenos de perdida diaria / caida maxima necesitan el estado del runner: aqui no aplican.
-    # Cada 5 minutos (el minimo de GitHub). GitHub NO garantiza los horarios: el 25/11 un cron
-    # horario corrio 1 sola vez en ~10 h. El robot es seguro de repetir (solo usa velas 1h
-    # cerradas y lee el estado de Capital.com), asi que revisar seguido solo reduce la demora
-    # entre el cierre de la vela y la orden; si no hay cambio de color no hace nada.
     - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
@@ -37,10 +38,19 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r robot_supertrend/requirements.txt
+      # Memoria de los frenos (capital al inicio del dia, maximo, pausa por caida): se
+      # guarda en la cache de GitHub al final de cada ejecucion y se recupera en la siguiente.
+      - name: Recuperar estado de los frenos
+        uses: actions/cache/restore@v4
+        with:
+          path: robot_supertrend/robot_state.json
+          key: robot-state-${{ github.run_id }}
+          restore-keys: robot-state-
       - name: Ejecutar robot
         run: python robot_supertrend/bot.py
         env:
           BOT_ENABLED: ${{ vars.BOT_ENABLED }}
+          BOT_STATE_FILE: robot_supertrend/robot_state.json
           BOT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.dry_run) || (vars.BOT_DRY_RUN || 'false') }}
           CAPITAL_ENV: ${{ vars.CAPITAL_ENV || 'DEMO' }}
           BOT_ALLOW_LIVE: ${{ vars.BOT_ALLOW_LIVE || 'false' }}
@@ -62,3 +72,9 @@ jobs:
           CAPITAL_API_KEY: ${{ secrets.CAPITAL_API_KEY }}
           CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
           CAPITAL_PASSWORD: ${{ secrets.CAPITAL_PASSWORD }}
+      - name: Guardar estado de los frenos
+        if: always() && hashFiles('robot_supertrend/robot_state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: robot_supertrend/robot_state.json
+          key: robot-state-${{ github.run_id }}-${{ github.run_attempt }}
