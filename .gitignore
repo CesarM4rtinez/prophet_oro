@@ -21,4 +21,8 @@ informes_backtesting_oro/
 
 # Archivos de sistema
 .DS_Store
-Thumbs.dbresearch/backtest_1m/.cache/
+Thumbs.db
+
+# Cache de datos 1m del laboratorio de backtesting (se regenera)
+research/backtest_1m/.cache/
+
