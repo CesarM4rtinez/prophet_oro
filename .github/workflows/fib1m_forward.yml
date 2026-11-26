@@ -1,0 +1,56 @@
+# Prueba en simulacion (sin ordenes) de la estrategia Fibonacci 1m — ver robot_fib1m/README.md
+# Cada ejecucion descarga de Capital.com las ultimas ~16 h de velas de 1 minuto (bid/ask reales),
+# las acumula en la rama `datos-fib1m` y actualiza el informe. NO envia ordenes.
+name: Prueba Fibonacci 1m (simulacion)
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"   # cada 2 h; con 1 000 velas por pedido, un atraso de hasta ~16 h no pierde datos
+  workflow_dispatch:
+
+concurrency:
+  group: fib1m-forward
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # solo para guardar los datos en la rama datos-fib1m
+
+jobs:
+  forward:
+    if: vars.FIB1M_FORWARD != 'false'   # para apagarla: variable FIB1M_FORWARD = false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r robot_supertrend/requirements.txt
+      - name: Preparar la rama de datos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin datos-fib1m >/dev/null; then
+            git clone --quiet --depth 1 --branch datos-fib1m "$url" forward_data
+          else
+            mkdir forward_data && cd forward_data && git init -q -b datos-fib1m && git remote add origin "$url"
+          fi
+      - name: Descargar velas 1m de Capital.com
+        run: python robot_fib1m/collect.py --data forward_data
+        env:
+          CAPITAL_ENV: ${{ vars.CAPITAL_ENV || 'DEMO' }}
+          BOT_EPIC: ${{ vars.BOT_EPIC || 'GOLD' }}
+          CAPITAL_API_KEY: ${{ secrets.CAPITAL_API_KEY }}
+          CAPITAL_IDENTIFIER: ${{ secrets.CAPITAL_IDENTIFIER }}
+          CAPITAL_PASSWORD: ${{ secrets.CAPITAL_PASSWORD }}
+      - name: Informe de la simulacion
+        run: python robot_fib1m/forward.py --data forward_data --summary "$GITHUB_STEP_SUMMARY"
+      - name: Guardar datos e informe
+        run: |
+          cd forward_data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -q -m "Velas 1m e informe $(date -u +%Y-%m-%d_%H:%M)"
+          git push -q origin datos-fib1m
